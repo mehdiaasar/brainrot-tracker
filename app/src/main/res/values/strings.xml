@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BrainRot Tracker</string>
+    <string name="accessibility_service_description">BrainRot Tracker counts reels and shorts you watch on Instagram, YouTube, TikTok, and Snapchat to help you track your screen time habits.</string>
+    <string name="notification_channel_milestones">Reel Milestones</string>
+    <string name="notification_channel_summary">Daily Summary</string>
+    <string name="notification_channel_service">Tracking Service</string>
+    <string name="service_notification_title">BrainRot Tracker Active</string>
+    <string name="service_notification_text">Monitoring your screen time</string>
+</resources>
