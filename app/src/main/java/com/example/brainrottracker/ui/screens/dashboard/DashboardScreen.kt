@@ -1,582 +1,548 @@
 package com.example.brainrottracker.ui.screens.dashboard
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseInOutSine
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Adjust
-import androidx.compose.material.icons.outlined.FormatQuote
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brainrottracker.data.local.db.entity.DailyLog
 import com.example.brainrottracker.data.model.Platform
-import com.example.brainrottracker.theme.BrainCritical
-import com.example.brainrottracker.theme.BrainHealthy
-import com.example.brainrottracker.theme.BrainOverstimulated
-import com.example.brainrottracker.theme.BrainRot
-import com.example.brainrottracker.theme.BrainTired
-import com.example.brainrottracker.theme.InstagramPink
-import com.example.brainrottracker.theme.PrimaryCyan
-import com.example.brainrottracker.theme.SnapchatYellow
-import com.example.brainrottracker.theme.TikTokCyan
-import com.example.brainrottracker.theme.YouTubeRed
-import com.example.brainrottracker.ui.components.GlassCard
-import com.example.brainrottracker.ui.components.PlatformCard
+import com.example.brainrottracker.service.ReelCounterService
+import com.example.brainrottracker.ui.components.BrainMascot
+import com.example.brainrottracker.ui.components.PlatformLogo
+import com.example.brainrottracker.theme.WarmAccent
+import com.example.brainrottracker.theme.rememberIsDark
+import com.example.brainrottracker.theme.WarmBackground
+import com.example.brainrottracker.theme.WarmBorder
+import com.example.brainrottracker.theme.WarmError
+import com.example.brainrottracker.theme.WarmGrantedGreen
+import com.example.brainrottracker.theme.WarmLightBackground
+import com.example.brainrottracker.theme.WarmLightBorder
+import com.example.brainrottracker.theme.WarmLightInner
+import com.example.brainrottracker.theme.WarmLightSurface
+import com.example.brainrottracker.theme.WarmLightText
+import com.example.brainrottracker.theme.WarmLightTextSecondary
+import com.example.brainrottracker.theme.WarmStepDim
+import com.example.brainrottracker.theme.WarmSurface
+import com.example.brainrottracker.theme.WarmText
+import com.example.brainrottracker.theme.WarmTextSecondary
 
 @Composable
 fun DashboardScreen(
     modifier: Modifier = Modifier,
     viewModel: DashboardViewModel = viewModel()
 ) {
+    val dark = rememberIsDark()
+    val bg = if (dark) WarmBackground else WarmLightBackground
+    val surface = if (dark) WarmSurface else WarmLightSurface
+    val cardBorder = if (dark) WarmBorder else WarmLightBorder
+    val trackBg = if (dark) WarmStepDim else WarmLightInner
+    val textPrimary = if (dark) WarmText else WarmLightText
+    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
+
     val todayLog by viewModel.todayLog.collectAsState()
     val brainHealth by viewModel.brainHealth.collectAsState()
-    val limits by viewModel.limits.collectAsState()
     val insightsList by viewModel.insights.collectAsState()
 
-    val log = todayLog
-    val totalReels = log?.getTotalReels() ?: 0
-    val totalMinutes = log?.getTotalMinutes() ?: 0
-
-    // Soft ambient backdrop animation blobs
-    val infiniteTransition = rememberInfiniteTransition(label = "ambientAnim")
-    val blob1X by infiniteTransition.animateFloat(
-        initialValue = 0.15f, targetValue = 0.35f,
-        animationSpec = infiniteRepeatable(tween(8000, easing = EaseInOutSine), RepeatMode.Reverse),
-        label = "blob1X"
-    )
-    val blob2X by infiniteTransition.animateFloat(
-        initialValue = 0.8f, targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(tween(10000, easing = EaseInOutSine), RepeatMode.Reverse),
-        label = "blob2X"
-    )
-    val blobAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.02f, targetValue = 0.06f,
-        animationSpec = infiniteRepeatable(tween(6000, easing = EaseInOutSine), RepeatMode.Reverse),
-        label = "blobAlpha"
-    )
-
-    // Dynamic theme accent matching brain states
-    val accentColor = when {
-        brainHealth >= 75 -> BrainHealthy
-        brainHealth >= 50 -> BrainTired
-        brainHealth >= 25 -> BrainOverstimulated
-        brainHealth >= 10 -> BrainCritical
-        else -> BrainRot
+    // Re-read the accessibility service state whenever the screen resumes, so the
+    // badge reflects the user toggling tracking in system settings.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isTracking by remember { mutableStateOf(ReelCounterService.isRunning) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) isTracking = ReelCounterService.isRunning
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Box(
-        modifier = Modifier
+    val totalMinutes = todayLog?.getTotalMinutes() ?: 0
+    val hours = totalMinutes / 60
+    val mins = totalMinutes % 60
+    val timeLabel = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+    val totalReels = todayLog?.getTotalReels() ?: 0
+
+    val healthLabel = when {
+        brainHealth >= 90 -> "Elite"
+        brainHealth >= 75 -> "Healthy"
+        brainHealth >= 50 -> "Tired"
+        brainHealth >= 25 -> "Overstimulated"
+        else -> "Brainrot"
+    }
+
+    val currentInsightIndex = remember { mutableStateOf(0) }
+    LaunchedEffect(insightsList) { currentInsightIndex.value = 0 }
+    val insightText = insightsList.getOrNull(currentInsightIndex.value)
+        ?: "You've been mindful today — keep the momentum going."
+
+    LazyColumn(
+        modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF061733), Color(0xFF09090B))
-                )
-            )
-            .drawBehind {
-                // Background radial glow
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(accentColor.copy(alpha = blobAlpha), Color.Transparent),
-                        center = Offset(size.width * blob1X, size.height * 0.2f),
-                        radius = size.width * 0.55f
-                    ),
-                    radius = size.width * 0.55f,
-                    center = Offset(size.width * blob1X, size.height * 0.2f)
-                )
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(PrimaryCyan.copy(alpha = blobAlpha * 0.5f), Color.Transparent),
-                        center = Offset(size.width * blob2X, size.height * 0.75f),
-                        radius = size.width * 0.45f
-                    ),
-                    radius = size.width * 0.45f,
-                    center = Offset(size.width * blob2X, size.height * 0.75f)
-                )
-            }
+            .background(bg),
     ) {
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            // 1. App Header
-            item {
+        // Header
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 28.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Left Target Icon Box
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF2B7FFF)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Adjust,
-                            contentDescription = "Target Logo",
-                            tint = Color(0xFFEFF6FF),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Centered Title
+                    Text("✳", color = textPrimary, fontSize = 18.sp)
                     Text(
-                        text = "Focus Center",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = Color.White
-                        ),
-                        textAlign = TextAlign.Center
+                        "FocusCenter",
+                        fontWeight = FontWeight.Medium,
+                        color = textPrimary,
+                        fontSize = 16.sp,
+                        letterSpacing = (-0.3).sp
                     )
-
-                    // Right Settings Button
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
+                }
+                val badgeBg = if (isTracking) WarmAccent else trackBg
+                val badgeContent = if (isTracking) Color.White else textSecondary
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(badgeBg)
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(20.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(badgeContent)
+                        )
+                        Text(
+                            if (isTracking) "TRACKING ON" else "TRACKING OFF",
+                            color = badgeContent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 1.5.sp
                         )
                     }
                 }
             }
+        }
 
-            // 2. Tracking Status Pill Row
-            item {
-                val isActive = viewModel.isTrackingActive
-                val trackingColor = if (isActive) Color(0xFF20C35F) else Color(0xFFFE302F)
-                val trackingText = if (isActive) "Tracking On" else "Tracking Off"
+        // Mascot hero — the brain degrades visually as today's usage climbs
+        item {
+            MascotHero(
+                health = brainHealth,
+                totalReels = totalReels,
+                todayLog = todayLog,
+                surface = surface,
+                trackBg = trackBg,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                dark = dark
+            )
+        }
 
+        // Score circle with a progress ring colored by brain-health tier
+        item {
+            val healthColor = when {
+                brainHealth >= 75 -> WarmGrantedGreen
+                brainHealth >= 40 -> WarmAccent
+                else -> WarmError
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .size(180.dp)
+                        .clip(CircleShape)
+                        .background(surface)
+                        .then(
+                            if (!dark) Modifier.border(1.dp, cardBorder, CircleShape)
+                            else Modifier
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(trackingColor)
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        // Pulsing indicator dot
-                        val dotTransition = rememberInfiniteTransition(label = "pulseDot")
-                        val dotAlpha by dotTransition.animateFloat(
-                            initialValue = 0.4f,
-                            targetValue = 1.0f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(1000, easing = EaseInOutSine),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "dotAlpha"
+                    Canvas(modifier = Modifier.size(180.dp)) {
+                        val stroke = 10.dp.toPx()
+                        val inset = stroke / 2f + 6.dp.toPx()
+                        val topLeft = Offset(inset, inset)
+                        val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+                        // Track
+                        drawArc(
+                            color = trackBg,
+                            startAngle = 0f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            style = Stroke(width = stroke),
+                            topLeft = topLeft,
+                            size = arcSize
                         )
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .graphicsLayer { alpha = dotAlpha }
-                                .clip(CircleShape)
-                                .background(Color.White)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = trackingText,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 14.sp
+                        // Progress
+                        if (brainHealth > 0) {
+                            drawArc(
+                                color = healthColor,
+                                startAngle = -90f,
+                                sweepAngle = 360f * brainHealth / 100f,
+                                useCenter = false,
+                                style = Stroke(width = stroke, cap = StrokeCap.Round),
+                                topLeft = topLeft,
+                                size = arcSize
                             )
-                        )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(140.dp)
+                            .clip(CircleShape)
+                            .background(if (dark) WarmBackground else WarmLightBorder),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "$brainHealth",
+                                fontWeight = FontWeight.Medium,
+                                color = healthColor,
+                                fontSize = 36.sp,
+                                lineHeight = 40.sp,
+                                letterSpacing = (-0.5).sp
+                            )
+                            Text(
+                                healthLabel.uppercase(),
+                                fontWeight = FontWeight.Medium,
+                                color = textSecondary,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.5.sp
+                            )
+                        }
                     }
                 }
             }
+        }
 
-            // 3. Focus Level circular gauge (Size-60 / 240.dp)
-            item {
-                FocusLevelGauge(healthScore = brainHealth)
-            }
-
-            // 4. Suggestion Card (Italicized insight advice with Quote Icon & refresh button)
-            item {
-                val currentInsightIndex = remember { mutableStateOf(0) }
-                val quoteText = insightsList.getOrNull(currentInsightIndex.value)
-                    ?: "You've watched $totalReels reels today. Try a 10-minute walk instead."
-
-                LaunchedEffect(insightsList) {
-                    currentInsightIndex.value = 0
-                }
-
-                GlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp),
-                    accentColor = accentColor,
-                    enableTilt = false,
-                    backgroundColor = Color.White.copy(alpha = 0.05f)
-                ) {
+        // Insight card — tap to cycle through all of today's insights
+        item {
+            val hasMultiple = insightsList.size > 1
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(surface)
+                    .then(
+                        if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                        else Modifier
+                    )
+                    .clickable(enabled = hasMultiple) {
+                        currentInsightIndex.value =
+                            (currentInsightIndex.value + 1) % insightsList.size
+                    }
+                    .padding(24.dp)
+            ) {
+                Column {
                     Row(
                         verticalAlignment = Alignment.Top,
-                        modifier = Modifier.fillMaxWidth()
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.FormatQuote,
-                            contentDescription = "Quote",
-                            tint = Color(0xFF80AEF9),
+                        Box(
                             modifier = Modifier
-                                .size(20.dp)
-                                .padding(top = 2.dp)
+                                .padding(top = 6.dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(WarmAccent)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = quoteText,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                lineHeight = 20.sp,
-                                fontWeight = FontWeight.Normal
-                            ),
-                            color = Color.White.copy(alpha = 0.7f),
+                            insightText,
+                            fontStyle = FontStyle.Italic,
+                            color = textSecondary,
+                            fontSize = 15.sp,
+                            lineHeight = 24.sp,
                             modifier = Modifier.weight(1f)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.1f))
-                                .clickable {
-                                    if (insightsList.isNotEmpty()) {
-                                        currentInsightIndex.value =
-                                            (currentInsightIndex.value + 1) % insightsList.size
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
+                    }
+                    if (hasMultiple) {
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Refresh,
-                                contentDescription = "Refresh",
-                                tint = Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(14.dp)
-                            )
+                            insightsList.indices.forEach { i ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (i == currentInsightIndex.value) WarmAccent else trackBg
+                                        )
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
 
-            // 5. Time & Reels Card (Combined metrics double-card matching oklch(0.28_0.06_259.815))
-            item {
-                val hours = totalMinutes / 60
-                val mins = totalMinutes % 60
-                val timeLabel = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
-
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = Color(0xFF162846),
-                    accentColor = accentColor,
-                    enableTilt = false
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = timeLabel,
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 28.sp,
-                                    color = Color.White
-                                )
-                            )
-                            Text(
-                                text = "Time Today",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color(0xFF80AEF9),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            )
-                        }
-
-                        // Vertical divider line
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(48.dp)
-                                .background(Color.White.copy(alpha = 0.1f))
-                        )
-
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "$totalReels",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 28.sp,
-                                    color = Color.White
-                                )
-                            )
-                            Text(
-                                text = "Reels Watched",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color(0xFF80AEF9),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 6. Apps Breakdown Section Title
-            item {
-                Text(
-                    text = "Apps Breakdown",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
+        // Time + Reels stats
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                DashStatCard(
+                    label = "TIME TODAY",
+                    value = timeLabel,
+                    modifier = Modifier.weight(1f),
+                    surface = surface,
+                    cardBorder = cardBorder,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary,
+                    dark = dark
+                )
+                DashStatCard(
+                    label = "REELS WATCHED",
+                    value = "$totalReels videos",
+                    modifier = Modifier.weight(1f),
+                    surface = surface,
+                    cardBorder = cardBorder,
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary,
+                    dark = dark
                 )
             }
-
-            // 7. Platform Cards Grid Layout (2 columns)
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    listOf(
-                        Triple(Platform.INSTAGRAM, InstagramPink, "reels"),
-                        Triple(Platform.YOUTUBE, YouTubeRed, "shorts"),
-                    ).forEach { (platform, color, label) ->
-                        val limitInfo = limits.find { it.platform == platform.name }
-                        val reelLimit = limitInfo?.dailyReelLimit ?: 30
-                        val minLimit = limitInfo?.dailyMinuteLimit ?: 60
-                        PlatformCard(
-                            platformName = platform.displayName,
-                            reelCount = log?.getReelsForPlatform(platform) ?: 0,
-                            minutes = log?.getMinutesForPlatform(platform) ?: 0,
-                            reelLimit = reelLimit,
-                            minuteLimit = minLimit,
-                            platformColor = color,
-                            reelLabel = label,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    listOf(
-                        Triple(Platform.TIKTOK, TikTokCyan, "videos"),
-                        Triple(Platform.SNAPCHAT, SnapchatYellow, "spotlights"),
-                    ).forEach { (platform, color, label) ->
-                        val limitInfo = limits.find { it.platform == platform.name }
-                        val reelLimit = limitInfo?.dailyReelLimit ?: 30
-                        val minLimit = limitInfo?.dailyMinuteLimit ?: 60
-                        PlatformCard(
-                            platformName = platform.displayName,
-                            reelCount = log?.getReelsForPlatform(platform) ?: 0,
-                            minutes = log?.getMinutesForPlatform(platform) ?: 0,
-                            reelLimit = reelLimit,
-                            minuteLimit = minLimit,
-                            platformColor = color,
-                            reelLabel = label,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-            // Bottom Spacing
-            item { Spacer(Modifier.height(24.dp)) }
         }
+
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 
 @Composable
-fun FocusLevelGauge(
-    healthScore: Int,
-    modifier: Modifier = Modifier
+private fun DashStatCard(
+    label: String,
+    value: String,
+    modifier: Modifier,
+    surface: Color,
+    cardBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    dark: Boolean
 ) {
-    val statusColor = when {
-        healthScore >= 75 -> Color(0xFF20C35F) // Healthy (oklch 150)
-        healthScore >= 50 -> Color(0xFFFEB900) // Tired (oklch 84.429)
-        else -> Color(0xFFFE302F) // Brainrot/Overstimulated (oklch 27.325)
-    }
-    val statusText = when {
-        healthScore >= 90 -> "Elite"
-        healthScore >= 75 -> "Healthy"
-        healthScore >= 50 -> "Tired"
-        healthScore >= 25 -> "Overstimulated"
-        else -> "Brainrot"
-    }
-    val statusTextColor = when {
-        healthScore >= 75 -> Color(0xFF20C35F)
-        healthScore >= 50 -> Color(0xFFFEC100)
-        else -> Color(0xFFFE302F)
-    }
-
-    val arcSweep = remember { Animatable(0f) }
-    LaunchedEffect(healthScore) {
-        arcSweep.animateTo(
-            targetValue = 360f * (healthScore / 100f),
-            animationSpec = tween(1200, easing = EaseInOutSine)
-        )
-    }
-
     Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier.size(240.dp)
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidthPx = 14.dp.toPx()
-            val radius = (size.minDimension - strokeWidthPx) / 2
-            val center = Offset(size.width / 2, size.height / 2)
-
-            // Background circle with stroke
-            drawCircle(
-                color = Color.White.copy(alpha = 0.08f),
-                radius = radius,
-                center = center,
-                style = Stroke(width = strokeWidthPx)
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(surface)
+            .then(
+                if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(8.dp))
+                else Modifier
             )
-
-            // Foreground sweep progress (LinearGradient brush matching yellow/green and blue/cyan)
-            drawArc(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF2B7FFF),
-                        Color(0xFF20C35F),
-                        Color(0xFFFEB900)
-                    )
-                ),
-                startAngle = -90f,
-                sweepAngle = arcSweep.value,
-                useCenter = false,
-                style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round),
-                topLeft = Offset(center.x - radius, center.y - radius),
-                size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
+            .padding(16.dp)
+    ) {
+        Column {
+            Text(
+                value,
+                fontWeight = FontWeight.Medium,
+                color = textPrimary,
+                fontSize = 22.sp,
+                letterSpacing = (-0.3).sp,
+                lineHeight = 26.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                label,
+                fontWeight = FontWeight.Medium,
+                color = textSecondary,
+                fontSize = 10.sp,
+                letterSpacing = 1.5.sp
             )
         }
+    }
+}
 
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Large white score
+/**
+ * The hero block: a speech bubble, the degrading [BrainMascot], the big "reels scrolled
+ * today" count, and a compact pill listing only the platforms actually used today.
+ */
+@Composable
+private fun MascotHero(
+    health: Int,
+    totalReels: Int,
+    todayLog: DailyLog?,
+    surface: Color,
+    trackBg: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    dark: Boolean
+) {
+    val message = when {
+        health >= 90 -> "Feeling razor sharp! ✨"
+        health >= 75 -> "All good up here."
+        health >= 50 -> "Getting a little foggy…"
+        health >= 25 -> "Ease off the scroll."
+        else -> "The damage is real."
+    }
+
+    val usedPlatforms = Platform.entries.mapNotNull { p ->
+        val count = todayLog?.getReelsForPlatform(p) ?: 0
+        if (count > 0) p to count else null
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        SpeechBubble(text = message, surface = surface, textPrimary = textPrimary, dark = dark)
+
+        Spacer(Modifier.height(4.dp))
+
+        BrainMascot(
+            health = health,
+            modifier = Modifier.size(180.dp)
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            "$totalReels",
+            fontWeight = FontWeight.Bold,
+            color = textPrimary,
+            fontSize = 56.sp,
+            lineHeight = 60.sp,
+            letterSpacing = (-1).sp
+        )
+        Text(
+            "Reels Scrolled Today",
+            color = textSecondary,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        if (usedPlatforms.isEmpty()) {
             Text(
-                text = "$healthScore",
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 60.sp,
-                    color = Color.White
-                ),
-                lineHeight = 60.sp
+                "No reels yet today — nice. 🧘",
+                color = textSecondary,
+                fontSize = 13.sp
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            // Label "Focus Level" in light blue
-            Text(
-                text = "Focus Level",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF80AEF9),
-                    fontSize = 14.sp
-                )
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            // Status pill
-            Box(
+        } else {
+            Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(statusColor.copy(alpha = 0.15f))
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
+                    .clip(CircleShape)
+                    .background(trackBg)
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = statusTextColor,
-                        fontSize = 12.sp
-                    )
-                )
+                usedPlatforms.forEachIndexed { index, (platform, count) ->
+                    if (index > 0) {
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 14.dp)
+                                .size(width = 1.dp, height = 16.dp)
+                                .background(textSecondary.copy(alpha = 0.3f))
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlatformLogo(platform = platform, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "$count",
+                            fontWeight = FontWeight.SemiBold,
+                            color = textPrimary,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+/** A rounded message bubble with a downward tail, like a comic speech balloon. */
+@Composable
+private fun SpeechBubble(
+    text: String,
+    surface: Color,
+    textPrimary: Color,
+    dark: Boolean
+) {
+    val bubbleColor = if (dark) surface else Color.White
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(bubbleColor)
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text,
+                color = textPrimary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        // Tail
+        Canvas(modifier = Modifier.size(width = 18.dp, height = 9.dp)) {
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(0f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width / 2f, size.height)
+                close()
+            }
+            drawPath(path, bubbleColor)
+        }
+    }
+}
