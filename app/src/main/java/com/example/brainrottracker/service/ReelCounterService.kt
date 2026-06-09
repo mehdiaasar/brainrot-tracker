@@ -1,6 +1,7 @@
 package com.example.brainrottracker.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
@@ -8,6 +9,8 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.brainrottracker.data.local.db.AppDatabase
+import com.example.brainrottracker.data.local.db.entity.DailyLog
+import com.example.brainrottracker.data.local.db.entity.UserLimits
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.data.repository.UsageRepository
 import com.example.brainrottracker.notification.NotificationHelper
@@ -43,8 +46,25 @@ class ReelCounterService : AccessibilityService() {
     private lateinit var notificationHelper: NotificationHelper
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val hideRunnable = Runnable { FloatingCounterService.instance?.hide() }
-    private val AUTO_HIDE_DELAY_MS = 4000L
+
+    // Heartbeat that keeps the HUD visible the whole time the user is in a reel feed, and hides
+    // it the moment they leave (the accessibility service gets no events from other apps, so we
+    // can't rely on those to dismiss the pill — we poll the active window instead).
+    private val HEARTBEAT_MS = 1000L
+    private var heartbeatActive = false
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            val fg = rootInActiveWindow?.packageName?.toString()
+            val leftReel = fg != null && (Platform.fromPackageName(fg) == null || hasReelPager[fg] != true)
+            if (leftReel) {
+                heartbeatActive = false
+                FloatingCounterService.instance?.hide()
+            } else {
+                FloatingCounterService.instance?.show()
+                mainHandler.postDelayed(this, HEARTBEAT_MS)
+            }
+        }
+    }
 
     // Per-package: the last known item index in the reel pager
     private val lastPagerIndex = mutableMapOf<String, Int>()
@@ -124,7 +144,8 @@ class ReelCounterService : AccessibilityService() {
         super.onDestroy()
         isRunning = false
         instance = null
-        mainHandler.removeCallbacks(hideRunnable)
+        heartbeatActive = false
+        mainHandler.removeCallbacks(heartbeatRunnable)
         serviceScope.cancel()
         stopService(Intent(this, FloatingCounterService::class.java))
     }
@@ -151,7 +172,7 @@ class ReelCounterService : AccessibilityService() {
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 handleViewScrolled(event, platform, pkg)
                 if (hasReelPager[pkg] == true || platform == Platform.TIKTOK) {
-                    showBubbleAndResetTimer(platform)
+                    keepBubbleVisible()
                 }
             }
 
@@ -165,7 +186,7 @@ class ReelCounterService : AccessibilityService() {
 
             else -> {
                 if (hasReelPager[pkg] == true || platform == Platform.TIKTOK) {
-                    showBubbleAndResetTimer(platform)
+                    keepBubbleVisible()
                 }
             }
         }
@@ -266,7 +287,7 @@ class ReelCounterService : AccessibilityService() {
         val info = inspectYouTubeShorts(root)
         if (info.isActive) {
             hasReelPager[pkg] = true
-            showBubbleAndResetTimer(platform)
+            keepBubbleVisible()
 
             val signature = info.signature
             if (signature != null) {
@@ -308,7 +329,7 @@ class ReelCounterService : AccessibilityService() {
         if (pagerInfo != null) {
             val (currentIndex, totalItems) = pagerInfo
             hasReelPager[pkg] = true
-            showBubbleAndResetTimer(platform)
+            keepBubbleVisible()
 
             val lastIndex = lastPagerIndex[pkg]
             if (lastIndex == null) {
@@ -593,26 +614,53 @@ class ReelCounterService : AccessibilityService() {
 
         serviceScope.launch {
             repository.incrementReelCount(platform)
+            val log = repository.getTodayLogSnapshot()
+            val limits = repository.getLimitsSnapshot()
+            val health = if (log != null) repository.calculateBrainHealth(log, limits) else 100
             withContext(Dispatchers.Main) {
-                showBubbleAndResetTimer(platform)
+                showBubbleAndResetTimer(log, limits, health)
+                maybeShowBlockingOverlay(platform, pkg, newCount)
             }
-            repository.getTodayLogSnapshot()?.let { log ->
-                notificationHelper.checkMilestone(log.getTotalReels())
-            }
+            log?.let { notificationHelper.checkMilestone(it.getTotalReels()) }
         }
     }
 
-    private fun showBubbleAndResetTimer(platform: Platform) {
-        mainHandler.removeCallbacks(hideRunnable)
-        val count = reelCounts[platform.packageName] ?: 0
-        val limit = limitsCache[platform.name] ?: 30
-        FloatingCounterService.instance?.updateStats(platform.displayName, platform.emoji, count, limit)
+    private fun maybeShowBlockingOverlay(platform: Platform, pkg: String, count: Int) {
+        val prefs = getSharedPreferences(FloatingCounterService.PREFS, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("blocking_enabled", false)) return
+        val limit = limitsCache[platform.name] ?: return
+        if (count >= limit) {
+            FloatingCounterService.instance?.showBlockingOverlay(platform.displayName, limit)
+        }
+    }
+
+    private fun showBubbleAndResetTimer(log: DailyLog?, limits: List<UserLimits>, health: Int) {
+        val total = log?.getTotalReels() ?: 0
+        // Per-platform breakdown for the tap-to-open popup — only platforms used today.
+        val breakdown = Platform.entries.mapNotNull { p ->
+            val c = log?.getReelsForPlatform(p) ?: 0
+            if (c > 0) {
+                val limit = limits.find { it.platform == p.name }?.dailyReelLimit
+                    ?: limitsCache[p.name] ?: 30
+                FloatingCounterService.HudPlatform(p, c, limit)
+            } else null
+        }
+        FloatingCounterService.instance?.updateHud(total, health, breakdown)
+        keepBubbleVisible()
+    }
+
+    /** Show the pill and keep it visible (via the heartbeat) for as long as a reel feed is open. */
+    private fun keepBubbleVisible() {
         FloatingCounterService.instance?.show()
-        mainHandler.postDelayed(hideRunnable, AUTO_HIDE_DELAY_MS)
+        if (!heartbeatActive) {
+            heartbeatActive = true
+            mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_MS)
+        }
     }
 
     private fun hideBubble() {
-        mainHandler.removeCallbacks(hideRunnable)
+        heartbeatActive = false
+        mainHandler.removeCallbacks(heartbeatRunnable)
         FloatingCounterService.instance?.hide()
     }
 }

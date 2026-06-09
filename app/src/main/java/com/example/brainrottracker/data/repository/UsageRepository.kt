@@ -70,6 +70,8 @@ class UsageRepository(private val database: AppDatabase) {
 
     fun getLimits(): Flow<List<UserLimits>> = userLimitsDao.getAll()
 
+    suspend fun getLimitsSnapshot(): List<UserLimits> = userLimitsDao.getAllOnce()
+
     fun getLimitForPlatform(platform: Platform): Flow<UserLimits?> =
         userLimitsDao.getForPlatform(platform.name)
 
@@ -96,7 +98,11 @@ class UsageRepository(private val database: AppDatabase) {
      *   25 × (1 − avgRatio)  where avgRatio = avg(reelRatio, minuteRatio) clamped to [0, 2] / 2
      * If no limit is configured for a platform, default limits (30 reels, 60 min) are assumed.
      */
-    fun calculateBrainHealth(log: DailyLog, limits: List<UserLimits>): Int {
+    fun calculateBrainHealth(
+        log: DailyLog,
+        limits: List<UserLimits>,
+        minuteOverrides: Map<Platform, Int> = emptyMap()
+    ): Int {
         val limitMap = limits.associateBy { it.platform }
         var totalScore = 0.0
 
@@ -106,7 +112,7 @@ class UsageRepository(private val database: AppDatabase) {
             val minuteLimit = platformLimits?.dailyMinuteLimit ?: 60
 
             val reels = log.getReelsForPlatform(platform).toDouble()
-            val minutes = log.getMinutesForPlatform(platform).toDouble()
+            val minutes = (minuteOverrides[platform] ?: log.getMinutesForPlatform(platform)).toDouble()
 
             // Ratio of usage to limit, clamped to 0..2 so going 2× over = 0 points
             val reelRatio = if (reelLimit > 0) (reels / reelLimit).coerceIn(0.0, 2.0) else if (reels > 0) 2.0 else 0.0

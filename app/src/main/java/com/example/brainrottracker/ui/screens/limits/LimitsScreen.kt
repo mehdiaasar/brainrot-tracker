@@ -2,6 +2,8 @@ package com.example.brainrottracker.ui.screens.limits
 
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,14 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -38,408 +37,421 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.brainrottracker.data.local.db.entity.UserLimits
-import com.example.brainrottracker.data.model.Platform
-import com.example.brainrottracker.theme.DangerRed
-import com.example.brainrottracker.theme.InstagramPink
-import com.example.brainrottracker.theme.PrimaryBlue
-import com.example.brainrottracker.theme.PrimaryCyan
-import com.example.brainrottracker.theme.SnapchatYellow
-import com.example.brainrottracker.theme.TextSecondary
-import com.example.brainrottracker.theme.TikTokCyan
-import com.example.brainrottracker.theme.YouTubeRed
+import com.example.brainrottracker.theme.ThemeController
+import com.example.brainrottracker.theme.rememberIsDark
+import com.example.brainrottracker.theme.WarmAccent
+import com.example.brainrottracker.theme.WarmBackground
+import com.example.brainrottracker.theme.WarmBorder
+import com.example.brainrottracker.theme.WarmLightBackground
+import com.example.brainrottracker.theme.WarmLightBorder
+import com.example.brainrottracker.theme.WarmLightInner
+import com.example.brainrottracker.theme.WarmLightSurface
+import com.example.brainrottracker.theme.WarmLightText
+import com.example.brainrottracker.theme.WarmLightTextSecondary
+import com.example.brainrottracker.theme.WarmSurface
+import com.example.brainrottracker.theme.WarmText
+import com.example.brainrottracker.theme.WarmTextSecondary
 
 @Composable
 fun LimitsScreen(
     modifier: Modifier = Modifier,
     viewModel: LimitsViewModel = viewModel()
 ) {
+    val dark = rememberIsDark()
+    val bg = if (dark) WarmBackground else WarmLightBackground
+    val surface = if (dark) WarmSurface else WarmLightSurface
+    val cardBorder = if (dark) WarmBorder else WarmLightBorder
+    val trackBg = if (dark) com.example.brainrottracker.theme.WarmStepDim else WarmLightInner
+    val textPrimary = if (dark) WarmText else WarmLightText
+    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
+
     val limits by viewModel.limits.collectAsState()
-    val todayLog by viewModel.todayLog.collectAsState()
     val context = LocalContext.current
     val sharedPrefs = remember { context.getSharedPreferences("brainrot_prefs", Context.MODE_PRIVATE) }
-    var strictMode by remember { mutableStateOf(sharedPrefs.getBoolean("strict_mode", false)) }
 
-    val platformColors = mapOf(
-        Platform.INSTAGRAM.name to InstagramPink,
-        Platform.YOUTUBE.name to YouTubeRed,
-        Platform.TIKTOK.name to TikTokCyan,
-        Platform.SNAPCHAT.name to SnapchatYellow,
-    )
+    val initialReelLimit = limits.firstOrNull()?.dailyReelLimit?.toFloat() ?: 50f
+    val initialMinuteLimit = limits.firstOrNull()?.dailyMinuteLimit?.toFloat() ?: 60f
 
-    // Check if any daily limit is breached
-    val isAnyLimitBreached = remember(limits, todayLog) {
-        if (todayLog == null) false
-        else {
-            Platform.entries.any { platform ->
-                val limit = limits.find { it.platform == platform.name }
-                val defaultReels = when (platform) {
-                    Platform.INSTAGRAM -> 30
-                    Platform.YOUTUBE -> 20
-                    Platform.TIKTOK -> 50
-                    Platform.SNAPCHAT -> 15
-                }
-                val cap = limit?.dailyReelLimit ?: defaultReels
-                val current = when (platform) {
-                    Platform.INSTAGRAM -> todayLog!!.instagramReels
-                    Platform.YOUTUBE -> todayLog!!.youtubeShorts
-                    Platform.TIKTOK -> todayLog!!.tiktokVideos
-                    Platform.SNAPCHAT -> todayLog!!.snapchatSpotlights
-                }
-                current >= cap
-            }
-        }
-    }
+    var reelLimit by remember(initialReelLimit) { mutableFloatStateOf(initialReelLimit) }
+    var minuteLimit by remember(initialMinuteLimit) { mutableFloatStateOf(initialMinuteLimit) }
+    var blockingEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("blocking_enabled", false)) }
+    var hudScale by remember { mutableFloatStateOf(sharedPrefs.getFloat("hud_scale", 1.2f)) }
 
-    val isEditingLocked = strictMode && isAnyLimitBreached
-
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(bg)
     ) {
-        item {
-            Text(
-                text = "Daily Limits & Blocks",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
-                color = Color.White
-            )
-            Text(
-                text = "Set limits for each platform",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
-            )
-        }
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
 
-        // Lock Banner shown when strict mode is active and cap is breached
-        if (isEditingLocked) {
+            // Header
             item {
-                LimitsCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    borderColor = DangerRed.copy(alpha = 0.5f)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 32.dp, bottom = 12.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("🔒", fontSize = 24.sp)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Editing Locked",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = DangerRed
+                        Text("✳", color = textPrimary, fontSize = 18.sp)
+                        Text(
+                            "SETTINGS",
+                            color = textSecondary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 1.5.sp
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Daily Limits",
+                        fontWeight = FontWeight.Normal,
+                        color = textPrimary,
+                        fontSize = 36.sp,
+                        lineHeight = 41.sp,
+                        letterSpacing = (-0.5).sp
+                    )
+                }
+            }
+
+            // Global daily limits card
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(surface)
+                        .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                        .padding(24.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("🎯", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    "Daily Video Limit",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 16.sp,
+                                    lineHeight = 22.sp
+                                )
+                                Text(
+                                    "Applies to all platforms",
+                                    color = textSecondary,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+
+                        // Video limit slider
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Videos per day", color = textSecondary, fontSize = 14.sp)
+                                Text(
+                                    "${reelLimit.toInt()} videos",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Slider(
+                                value = reelLimit,
+                                onValueChange = { reelLimit = it },
+                                onValueChangeFinished = {
+                                    viewModel.updateGlobalLimits(reelLimit.toInt(), minuteLimit.toInt())
+                                },
+                                valueRange = 0f..200f,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = WarmAccent,
+                                    activeTrackColor = WarmAccent,
+                                    inactiveTrackColor = trackBg,
+                                    activeTickColor = Color.Transparent,
+                                    inactiveTickColor = Color.Transparent
+                                )
                             )
-                            Text(
-                                text = "Strict Mode is active and you have reached a daily limit today. You cannot edit settings until tomorrow.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
+                        }
+
+                        HorizontalDivider(color = cardBorder, thickness = 1.dp)
+
+                        // Time limit slider
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Time per day", color = textSecondary, fontSize = 14.sp)
+                                Text(
+                                    "${minuteLimit.toInt()} min",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Slider(
+                                value = minuteLimit,
+                                onValueChange = { minuteLimit = it },
+                                onValueChangeFinished = {
+                                    viewModel.updateGlobalLimits(reelLimit.toInt(), minuteLimit.toInt())
+                                },
+                                valueRange = 0f..240f,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = WarmAccent,
+                                    activeTrackColor = WarmAccent,
+                                    inactiveTrackColor = trackBg,
+                                    activeTickColor = Color.Transparent,
+                                    inactiveTickColor = Color.Transparent
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            // App blocking toggle
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(surface)
+                        .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                        .padding(24.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("🚫", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    "App Blocking",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 16.sp,
+                                    lineHeight = 22.sp
+                                )
+                                Text(
+                                    "Show overlay when daily limit is reached",
+                                    color = textSecondary,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+                        WarmToggle(
+                            checked = blockingEnabled,
+                            onCheckedChange = {
+                                blockingEnabled = it
+                                sharedPrefs.edit().putBoolean("blocking_enabled", it).apply()
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Appearance / theme selector
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(surface)
+                        .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                        .padding(24.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("🎨", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    "Appearance",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 16.sp,
+                                    lineHeight = 22.sp
+                                )
+                                Text(
+                                    "Choose your theme",
+                                    color = textSecondary,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+                        ThemeModeSelector(
+                            selected = ThemeController.mode,
+                            onSelect = { ThemeController.selectMode(it) },
+                            trackBg = trackBg,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary
+                        )
+                    }
+                }
+            }
+
+            // Floating counter (HUD) size
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 24.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(surface)
+                        .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                        .padding(24.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("📏", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    "Floating Counter",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 16.sp,
+                                    lineHeight = 22.sp
+                                )
+                                Text(
+                                    "Adjust the on-screen counter size",
+                                    color = textSecondary,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Size", color = textSecondary, fontSize = 14.sp)
+                                Text(
+                                    "${(hudScale * 100).toInt()}%",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            Slider(
+                                value = hudScale,
+                                onValueChange = { hudScale = it },
+                                onValueChangeFinished = {
+                                    sharedPrefs.edit().putFloat("hud_scale", hudScale).apply()
+                                },
+                                valueRange = 0.8f..1.8f,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = WarmAccent,
+                                    activeTrackColor = WarmAccent,
+                                    inactiveTrackColor = trackBg,
+                                    activeTickColor = Color.Transparent,
+                                    inactiveTickColor = Color.Transparent
+                                )
                             )
                         }
                     }
                 }
             }
         }
-
-        // Strict mode toggle
-        item {
-            LimitsCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Strict Mode Icon
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(PrimaryBlue.copy(alpha = 0.20f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("🔒", fontSize = 16.sp)
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Strict Mode",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Prevents editing limits once daily cap is breached",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                    Switch(
-                        checked = strictMode,
-                        onCheckedChange = { checked ->
-                            if (!isEditingLocked) {
-                                strictMode = checked
-                                sharedPrefs.edit().putBoolean("strict_mode", checked).apply()
-                            }
-                        },
-                        enabled = !isEditingLocked,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = PrimaryBlue,
-                            uncheckedThumbColor = Color(0xFF9E9EA9),
-                            uncheckedTrackColor = Color.White.copy(alpha = 0.1f)
-                        )
-                    )
-                }
-            }
-        }
-
-        // Per-platform limit cards
-        items(Platform.entries.toList()) { platform ->
-            val existingLimit = limits.find { it.platform == platform.name }
-            val color = platformColors[platform.name] ?: PrimaryCyan
-            val currentReels = when (platform) {
-                Platform.INSTAGRAM -> todayLog?.instagramReels ?: 0
-                Platform.YOUTUBE -> todayLog?.youtubeShorts ?: 0
-                Platform.TIKTOK -> todayLog?.tiktokVideos ?: 0
-                Platform.SNAPCHAT -> todayLog?.snapchatSpotlights ?: 0
-            }
-
-            PlatformLimitCard(
-                platform = platform,
-                currentLimit = existingLimit,
-                currentReels = currentReels,
-                platformColor = color,
-                isEditingLocked = isEditingLocked,
-                onUpdateLimit = { updatedLimits ->
-                    viewModel.updateLimit(updatedLimits)
-                }
-            )
-        }
-
-        item { Spacer(Modifier.height(16.dp)) }
     }
 }
 
 @Composable
-fun LimitsCard(
-    modifier: Modifier = Modifier,
-    borderColor: Color = Color.White.copy(alpha = 0.08f),
-    content: @Composable () -> Unit
+private fun ThemeModeSelector(
+    selected: ThemeController.Mode,
+    onSelect: (ThemeController.Mode) -> Unit,
+    trackBg: Color,
+    textPrimary: Color,
+    textSecondary: Color
 ) {
-    androidx.compose.material3.Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = Color(0xFF141A3D), // Figma limits card background #141A3D
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+    val options = listOf(
+        ThemeController.Mode.LIGHT to "☀  Light",
+        ThemeController.Mode.DARK to "🌙  Dark",
+        ThemeController.Mode.SYSTEM to "⚙  System",
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(trackBg)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            content()
+        options.forEach { (mode, label) ->
+            val isSelected = mode == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (isSelected) WarmAccent else Color.Transparent)
+                    .clickable { onSelect(mode) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    label,
+                    color = if (isSelected) Color.White else textSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
 
 @Composable
-fun PlatformLimitCard(
-    platform: Platform,
-    currentLimit: UserLimits?,
-    currentReels: Int,
-    platformColor: Color,
-    isEditingLocked: Boolean,
-    onUpdateLimit: (UserLimits) -> Unit
+private fun WarmToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
 ) {
-    val defaultReelLimit = when (platform) {
-        Platform.INSTAGRAM -> 30
-        Platform.YOUTUBE -> 20
-        Platform.TIKTOK -> 50
-        Platform.SNAPCHAT -> 15
+    Box(
+        modifier = Modifier
+            .size(width = 48.dp, height = 28.dp)
+            .clip(CircleShape)
+            .background(if (checked) WarmAccent else WarmLightBorder)
+            .clickable { onCheckedChange(!checked) }
+            .padding(4.dp),
+        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+        )
     }
-    val defaultMinuteLimit = when (platform) {
-        Platform.INSTAGRAM -> 60
-        Platform.YOUTUBE -> 90
-        Platform.TIKTOK -> 45
-        Platform.SNAPCHAT -> 30
-    }
-
-    var reelLimit by remember(currentLimit) { mutableFloatStateOf((currentLimit?.dailyReelLimit ?: defaultReelLimit).toFloat()) }
-    var minuteLimit by remember(currentLimit) { mutableFloatStateOf((currentLimit?.dailyMinuteLimit ?: defaultMinuteLimit).toFloat()) }
-    var blockingEnabled by remember(currentLimit) { mutableStateOf(currentLimit?.blockingEnabled ?: true) }
-
-    LimitsCard(modifier = Modifier.fillMaxWidth()) {
-        // Card Header Row: Icon + Name (Left), Lock (Right)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Platform Brand Icon Container
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(platformColor.copy(alpha = 0.20f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = platformEmoji(platform), fontSize = 14.sp)
-                }
-
-                Text(
-                    text = "${platform.displayName}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White
-                )
-            }
-            if (isEditingLocked) {
-                Text("🔒", fontSize = 16.sp)
-            }
-        }
-
-        // Reel limit section
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Max Videos / Day",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Normal),
-                    color = Color(0xFF9E9EA9)
-                )
-                // Badge displaying value
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(PrimaryBlue.copy(alpha = 0.20f))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "${reelLimit.toInt()}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = PrimaryBlue
-                    )
-                }
-            }
-
-            Slider(
-                value = reelLimit,
-                onValueChange = { if (!isEditingLocked) reelLimit = it },
-                onValueChangeFinished = {
-                    onUpdateLimit(UserLimits(
-                        platform = platform.name,
-                        dailyReelLimit = reelLimit.toInt(),
-                        dailyMinuteLimit = minuteLimit.toInt(),
-                        blockingEnabled = blockingEnabled
-                    ))
-                },
-                enabled = !isEditingLocked,
-                valueRange = 0f..200f,
-                steps = 19,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = PrimaryBlue,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.10f),
-                    activeTickColor = Color.Transparent,
-                    inactiveTickColor = Color.Transparent
-                )
-            )
-        }
-
-        // Time limit section
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Max Time / Day",
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Normal),
-                    color = Color(0xFF9E9EA9)
-                )
-                // Badge displaying value
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(PrimaryBlue.copy(alpha = 0.20f))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "${minuteLimit.toInt()}m",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = PrimaryBlue
-                    )
-                }
-            }
-
-            Slider(
-                value = minuteLimit,
-                onValueChange = { if (!isEditingLocked) minuteLimit = it },
-                onValueChangeFinished = {
-                    onUpdateLimit(UserLimits(
-                        platform = platform.name,
-                        dailyReelLimit = reelLimit.toInt(),
-                        dailyMinuteLimit = minuteLimit.toInt(),
-                        blockingEnabled = blockingEnabled
-                    ))
-                },
-                enabled = !isEditingLocked,
-                valueRange = 0f..240f,
-                steps = 23,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.White,
-                    activeTrackColor = PrimaryBlue,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.10f),
-                    activeTickColor = Color.Transparent,
-                    inactiveTickColor = Color.Transparent
-                )
-            )
-        }
-
-        // Blocking toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Enable App Blocking",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
-            Switch(
-                checked = blockingEnabled,
-                onCheckedChange = {
-                    if (!isEditingLocked) {
-                        blockingEnabled = it
-                        onUpdateLimit(UserLimits(
-                            platform = platform.name,
-                            dailyReelLimit = reelLimit.toInt(),
-                            dailyMinuteLimit = minuteLimit.toInt(),
-                            blockingEnabled = it
-                        ))
-                    }
-                },
-                enabled = !isEditingLocked,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = PrimaryBlue,
-                    uncheckedThumbColor = Color(0xFF9E9EA9),
-                    uncheckedTrackColor = Color.White.copy(alpha = 0.1f)
-                )
-            )
-        }
-    }
-}
-
-private fun platformEmoji(platform: Platform): String = when (platform) {
-    Platform.INSTAGRAM -> "📸"
-    Platform.YOUTUBE -> "▶️"
-    Platform.TIKTOK -> "🎵"
-    Platform.SNAPCHAT -> "👻"
 }

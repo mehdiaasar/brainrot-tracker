@@ -83,6 +83,7 @@ fun DashboardScreen(
     val todayLog by viewModel.todayLog.collectAsState()
     val brainHealth by viewModel.brainHealth.collectAsState()
     val insightsList by viewModel.insights.collectAsState()
+    val screenTimeToday by viewModel.screenTimeToday.collectAsState()
 
     // Re-read the accessibility service state whenever the screen resumes, so the
     // badge reflects the user toggling tracking in system settings.
@@ -96,7 +97,7 @@ fun DashboardScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val totalMinutes = todayLog?.getTotalMinutes() ?: 0
+    val totalMinutes = screenTimeToday
     val hours = totalMinutes / 60
     val mins = totalMinutes % 60
     val timeLabel = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"

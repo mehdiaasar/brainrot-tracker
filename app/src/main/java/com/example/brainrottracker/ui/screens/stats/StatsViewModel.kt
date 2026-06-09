@@ -7,10 +7,15 @@ import com.example.brainrottracker.data.local.db.AppDatabase
 import com.example.brainrottracker.data.local.db.entity.DailyLog
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.data.repository.UsageRepository
+import com.example.brainrottracker.data.util.ScreenTimeHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
+import kotlin.math.roundToInt
 
 data class WeeklyStats(
     val dailyLogs: List<DailyLog> = emptyList(),
@@ -19,29 +24,36 @@ data class WeeklyStats(
     val productivityScore: Int = 100,
     val bestDay: DailyLog? = null,
     val worstDay: DailyLog? = null,
-    /** Brain-health (0..100) for each logged day, keyed by date string. */
     val healthByDate: Map<String, Int> = emptyMap(),
-    /** Platforms used this week with their total reel counts, highest first. */
     val topApps: List<Pair<Platform, Int>> = emptyList(),
 )
 
 class StatsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: UsageRepository
+    private val app = application
 
     init {
         val db = AppDatabase.getInstance(application)
         repository = UsageRepository(db)
     }
 
-    val weeklyStats: StateFlow<WeeklyStats> =
-        combine(repository.getWeeklyLogs(), repository.getLimits()) { logs, limits ->
-            val totalReels = logs.sumOf { it.getTotalReels() }
-            val totalMinutes = logs.sumOf { it.getTotalMinutes() }
-            val productivityScore = if (logs.isEmpty()) 100
-            else (100 - (totalReels.toFloat() / (logs.size * 30) * 100).toInt()).coerceIn(0, 100)
+    // Fetch week screen time from UsageStats once per subscription (no need to poll here)
+    private val weekScreenTime = flow {
+        emit(ScreenTimeHelper.getWeekMinutesByPlatform(app))
+    }.flowOn(Dispatchers.IO)
 
-            val healthByDate = logs.associate { it.date to repository.calculateBrainHealth(it, limits) }
+    val weeklyStats: StateFlow<WeeklyStats> =
+        combine(repository.getWeeklyLogs(), repository.getLimits(), weekScreenTime) { logs, limits, weekMinutes ->
+            val totalReels = logs.sumOf { it.getTotalReels() }
+            val totalMinutes = weekMinutes.values.sum()
+
+            val healthByDate = logs.associate { log ->
+                log.date to repository.calculateBrainHealth(log, limits)
+            }
+
+            val productivityScore = if (healthByDate.isEmpty()) 100
+            else healthByDate.values.average().roundToInt().coerceIn(0, 100)
 
             val topApps = Platform.entries
                 .map { p -> p to logs.sumOf { it.getReelsForPlatform(p) } }
@@ -59,5 +71,5 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
                 topApps = topApps
             )
         }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WeeklyStats())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WeeklyStats())
 }
