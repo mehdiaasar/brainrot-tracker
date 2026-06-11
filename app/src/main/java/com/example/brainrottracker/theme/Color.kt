@@ -49,3 +49,28 @@ val TextTertiary = Color(0x66FFFFFF)
 // Misc
 val CardBackground = Color(0xFF1E1E3A)
 val DividerColor = Color(0x1AFFFFFF)
+
+// Warm / dark palette (used across all screens in dark mode)
+val WarmBackground = Color(0xFF181715)
+val WarmSurface = Color(0xFF252320)
+val WarmBorder = Color(0xFF2F2C28)
+val WarmStepDim = Color(0xFF1F1E1B)
+val WarmText = Color(0xFFFAF9F5)
+val WarmTextSecondary = Color(0xFFA09D96)
+val WarmAccent = Color(0xFFCC785C)       // terracotta CTA
+val WarmGrantedGreen = Color(0xFF5DB872) // granted badge
+
+// Warm / light palette (used across all screens in light mode)
+val WarmLightBackground = Color(0xFFFAF9F5)
+val WarmLightSurface = Color(0xFFEFE9DE)
+val WarmLightBorder = Color(0xFFE6DFD8)
+val WarmLightInner = Color(0xFFEBE6DF)
+val WarmLightText = Color(0xFF141413)
+val WarmLightTextSecondary = Color(0xFF6C6A64)
+
+// Stats chart colors (consistent across light/dark)
+val StatsChartTikTok = Color(0xFFCC785C)
+val StatsChartYouTube = Color(0xFFC64545)
+val StatsChartInstagram = Color(0xFFE8A55A)
+val StatsChartSnapchat = Color(0xFF5DB8A6)
+val WarmError = Color(0xFFC64545)

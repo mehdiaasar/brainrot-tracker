@@ -28,6 +28,9 @@ class LimitsViewModel(application: Application) : AndroidViewModel(application) 
     val todayLog: StateFlow<DailyLog?> = repository.getTodayLog()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    /** Exposes the repository so the screen can trigger an immediate cloud sync. */
+    fun repositoryForSync(): UsageRepository = repository
+
     fun updateLimit(limits: UserLimits) {
         viewModelScope.launch {
             repository.updateLimits(limits)
@@ -37,7 +40,7 @@ class LimitsViewModel(application: Application) : AndroidViewModel(application) 
     fun updateGlobalLimits(reelLimit: Int, minuteLimit: Int) {
         viewModelScope.launch {
             Platform.entries.forEach { platform ->
-                repository.updateLimits(UserLimits(platform.name, reelLimit, minuteLimit, true))
+                repository.updateLimits(UserLimits(platform.name, reelLimit, minuteLimit))
             }
         }
     }

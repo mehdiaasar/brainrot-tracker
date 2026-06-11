@@ -1,8 +1,12 @@
 package com.example.brainrottracker.ui.screens.onboarding
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
@@ -29,6 +34,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,6 +110,44 @@ fun OnboardingScreen(
     }
 
     remember { checkPermissions(); true }
+
+    // On API 33+ notifications need an actual runtime permission grant, not just a settings page.
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { checkPermissions() }
+    var notificationRequestAttempted by rememberSaveable { mutableStateOf(false) }
+
+    // Play policy: prominent disclosure + consent BEFORE sending the user to enable
+    // the accessibility service.
+    val sharedPrefs = remember { context.getSharedPreferences("brainrot_prefs", Context.MODE_PRIVATE) }
+    var showAccessibilityDisclosure by remember { mutableStateOf(false) }
+
+    if (showAccessibilityDisclosure) {
+        AlertDialog(
+            onDismissRequest = { showAccessibilityDisclosure = false },
+            title = { Text("How Accessibility is used") },
+            text = {
+                Text(
+                    "BrainRot Tracker uses Android's Accessibility API to read screen content " +
+                        "from Instagram, YouTube, TikTok and Snapchat only, in order to count the " +
+                        "short videos you watch.\n\n" +
+                        "This data is processed and stored on your device. If you later sign in and " +
+                        "enable cloud backup, only your daily totals are uploaded to your private " +
+                        "account. Nothing is ever shared with third parties."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    sharedPrefs.edit().putBoolean("accessibility_disclosure_accepted", true).apply()
+                    showAccessibilityDisclosure = false
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }) { Text("Agree & Continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAccessibilityDisclosure = false }) { Text("Not now") }
+            }
+        )
+    }
 
     val allGranted = hasAccessibility && hasOverlay && hasNotifications && hasUsageStats
 
@@ -191,7 +235,11 @@ fun OnboardingScreen(
                 textSecondary = textSecondary,
                 btnBg = bg,
                 onOpenSettings = {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    if (sharedPrefs.getBoolean("accessibility_disclosure_accepted", false)) {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    } else {
+                        showAccessibilityDisclosure = true
+                    }
                 }
             )
             PermissionCard(
@@ -222,10 +270,17 @@ fun OnboardingScreen(
                 btnBg = bg,
                 onOpenSettings = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        if (!notificationRequestAttempted) {
+                            // First tap: show the system permission dialog directly
+                            notificationRequestAttempted = true
+                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            // Repeat denials don't re-show the dialog — fall back to settings
+                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            }
+                            context.startActivity(intent)
                         }
-                        context.startActivity(intent)
                     } else {
                         context.startActivity(Intent(Settings.ACTION_SETTINGS))
                     }

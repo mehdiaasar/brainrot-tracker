@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"
@@ -42,10 +42,10 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- Floating counter overlay service -->
+        <!-- Floating counter overlay service (only started from inside the app) -->
         <service
             android:name=".service.FloatingCounterService"
-            android:exported="true"
+            android:exported="false"
             android:foregroundServiceType="specialUse" />
 
         <!-- Home screen widget -->

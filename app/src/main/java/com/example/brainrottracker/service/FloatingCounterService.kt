@@ -36,7 +36,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.notification.NotificationHelper
-import java.time.LocalDate
 
 /**
  * Floating HUD overlay: a rounded pill showing a brain mascot that degrades with brain health
@@ -75,11 +74,12 @@ class FloatingCounterService : Service() {
     private var popupView: View? = null
     private var isPopupAdded = false
 
-    // Blocking overlay state.
+    // Blocking overlay state. REMIND-mode dismissals last for one foreground session of the
+    // blocked app (cleared by onTrackedAppLeft); SNOOZE expiry lives in prefs so it survives
+    // service restarts; HARD is never suppressed.
     private var blockingView: View? = null
     private var isBlockingAdded = false
-    private val dismissedToday = mutableSetOf<String>()
-    private var dismissedDate: String = ""
+    private val sessionDismissed = mutableSetOf<String>()
 
     /** One row of the tap-to-open breakdown. */
     data class HudPlatform(val platform: Platform, val count: Int, val limit: Int)
@@ -557,14 +557,23 @@ class FloatingCounterService : Service() {
 
     // ── Blocking overlay ──────────────────────────────────────────────────────
 
-    fun showBlockingOverlay(platformName: String, limit: Int) {
+    /** Called by [ReelCounterService] when a tracked app leaves the foreground. */
+    fun onTrackedAppLeft(pkg: String) {
+        Platform.fromPackageName(pkg)?.let { sessionDismissed.remove(it.name) }
+    }
+
+    fun showBlockingOverlay(platform: Platform, limit: Int, mode: BlockingMode) {
         mainHandler.post {
-            val today = LocalDate.now().toString()
-            if (dismissedDate != today) {
-                dismissedToday.clear()
-                dismissedDate = today
+            when (mode) {
+                BlockingMode.HARD -> Unit // never suppressed
+                BlockingMode.SNOOZE -> {
+                    val snoozeUntil = prefs.getLong("snooze_until_${platform.name}", 0L)
+                    if (System.currentTimeMillis() < snoozeUntil) return@post
+                }
+                BlockingMode.REMIND -> {
+                    if (sessionDismissed.contains(platform.name)) return@post
+                }
             }
-            if (dismissedToday.contains(platformName)) return@post
             if (isBlockingAdded) return@post
 
             resolveAppearance()
@@ -585,10 +594,7 @@ class FloatingCounterService : Service() {
             val scrim = FrameLayout(this).apply {
                 setBackgroundColor(0xDD000000.toInt())
             }
-            scrim.addView(buildBlockingCard(platformName, limit) {
-                dismissedToday.add(platformName)
-                removeBlockingOverlay()
-            }, centeredCardParams())
+            scrim.addView(buildBlockingCard(platform, limit, mode), centeredCardParams())
 
             blockingView = scrim
             try {
@@ -600,7 +606,7 @@ class FloatingCounterService : Service() {
         }
     }
 
-    private fun buildBlockingCard(platformName: String, limit: Int, onDismiss: () -> Unit): View {
+    private fun buildBlockingCard(platform: Platform, limit: Int, mode: BlockingMode): View {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -635,8 +641,13 @@ class FloatingCounterService : Service() {
             ).apply { bottomMargin = dp(8f) }
         })
 
+        val subtitle = when (mode) {
+            BlockingMode.HARD -> "You've watched $limit ${platform.displayName} videos today.\nBlocked until midnight. 🧘"
+            BlockingMode.SNOOZE -> "You've watched $limit ${platform.displayName} videos today.\nTime to take a break! 🧘"
+            BlockingMode.REMIND -> "You've watched $limit ${platform.displayName} videos today.\nTime to take a break! 🧘"
+        }
         card.addView(TextView(this).apply {
-            text = "You've watched $limit $platformName videos today.\nTime to take a break! 🧘"
+            text = subtitle
             setTextColor(textSecondaryColor)
             textSize = 14f
             gravity = Gravity.CENTER
@@ -650,8 +661,9 @@ class FloatingCounterService : Service() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
+        // Primary action in every mode: leave the blocked app.
         actions.addView(TextView(this).apply {
-            text = "Open App"
+            text = "Close app"
             setTextColor(Color.WHITE)
             textSize = 14f
             setTypeface(Typeface.DEFAULT_BOLD)
@@ -663,20 +675,47 @@ class FloatingCounterService : Service() {
             }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener {
-                onDismiss()
-                openApp()
+                removeBlockingOverlay()
+                ReelCounterService.instance?.performGlobalAction(
+                    android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
+                )
             }
         })
-        actions.addView(TextView(this).apply {
-            text = "Got it"
-            setTextColor(textSecondaryColor)
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { leftMargin = dp(8f) }
-            setOnClickListener { onDismiss() }
-        })
+        // Secondary action depends on the mode; HARD offers no way to keep scrolling.
+        when (mode) {
+            BlockingMode.HARD -> Unit
+            BlockingMode.SNOOZE -> actions.addView(TextView(this).apply {
+                text = "Snooze 5 min"
+                setTextColor(textSecondaryColor)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { leftMargin = dp(8f) }
+                setOnClickListener {
+                    prefs.edit()
+                        .putLong(
+                            "snooze_until_${platform.name}",
+                            System.currentTimeMillis() + BlockingMode.SNOOZE_MS
+                        )
+                        .apply()
+                    removeBlockingOverlay()
+                }
+            })
+            BlockingMode.REMIND -> actions.addView(TextView(this).apply {
+                text = "Got it"
+                setTextColor(textSecondaryColor)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { leftMargin = dp(8f) }
+                setOnClickListener {
+                    sessionDismissed.add(platform.name)
+                    removeBlockingOverlay()
+                }
+            })
+        }
         card.addView(actions)
 
         return card

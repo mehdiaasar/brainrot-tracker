@@ -36,8 +36,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brainrottracker.data.local.prefs.AppPreferences
+import com.example.brainrottracker.data.sync.UsageSyncManager
+import com.example.brainrottracker.service.BlockingMode
 import com.example.brainrottracker.theme.ThemeController
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.example.brainrottracker.theme.rememberIsDark
 import com.example.brainrottracker.theme.WarmAccent
 import com.example.brainrottracker.theme.WarmBackground
@@ -55,6 +63,7 @@ import com.example.brainrottracker.theme.WarmTextSecondary
 @Composable
 fun LimitsScreen(
     modifier: Modifier = Modifier,
+    onNavigateToSignIn: () -> Unit = {},
     viewModel: LimitsViewModel = viewModel()
 ) {
     val dark = rememberIsDark()
@@ -75,7 +84,17 @@ fun LimitsScreen(
     var reelLimit by remember(initialReelLimit) { mutableFloatStateOf(initialReelLimit) }
     var minuteLimit by remember(initialMinuteLimit) { mutableFloatStateOf(initialMinuteLimit) }
     var blockingEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("blocking_enabled", false)) }
+    var blockingMode by remember {
+        mutableStateOf(BlockingMode.fromPref(sharedPrefs.getString(BlockingMode.PREF_KEY, null)))
+    }
     var hudScale by remember { mutableFloatStateOf(sharedPrefs.getFloat("hud_scale", 1.2f)) }
+
+    val signedInUser by remember { AppPreferences.userFlow(context) }
+        .collectAsState(initial = null)
+    var cloudSyncEnabled by remember {
+        mutableStateOf(sharedPrefs.getBoolean(UsageSyncManager.KEY_ENABLED, false))
+    }
+    val scope = rememberCoroutineScope()
 
     Box(
         modifier = modifier
@@ -235,40 +254,64 @@ fun LimitsScreen(
                         .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
                         .padding(24.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("🚫", fontSize = 18.sp)
-                            Column {
-                                Text(
-                                    "App Blocking",
-                                    fontWeight = FontWeight.Medium,
-                                    color = textPrimary,
-                                    fontSize = 16.sp,
-                                    lineHeight = 22.sp
-                                )
-                                Text(
-                                    "Show overlay when daily limit is reached",
-                                    color = textSecondary,
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("🚫", fontSize = 18.sp)
+                                Column {
+                                    Text(
+                                        "App Blocking",
+                                        fontWeight = FontWeight.Medium,
+                                        color = textPrimary,
+                                        fontSize = 16.sp,
+                                        lineHeight = 22.sp
+                                    )
+                                    Text(
+                                        "Show overlay when daily limit is reached",
+                                        color = textSecondary,
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
+                                    )
+                                }
                             }
+                            WarmToggle(
+                                checked = blockingEnabled,
+                                onCheckedChange = {
+                                    blockingEnabled = it
+                                    sharedPrefs.edit().putBoolean("blocking_enabled", it).apply()
+                                }
+                            )
                         }
-                        WarmToggle(
-                            checked = blockingEnabled,
-                            onCheckedChange = {
-                                blockingEnabled = it
-                                sharedPrefs.edit().putBoolean("blocking_enabled", it).apply()
-                            }
-                        )
+                        if (blockingEnabled) {
+                            HorizontalDivider(color = cardBorder, thickness = 1.dp)
+                            BlockingModeSelector(
+                                selected = blockingMode,
+                                onSelect = {
+                                    blockingMode = it
+                                    sharedPrefs.edit().putString(BlockingMode.PREF_KEY, it.name).apply()
+                                },
+                                trackBg = trackBg,
+                                textSecondary = textSecondary
+                            )
+                            Text(
+                                when (blockingMode) {
+                                    BlockingMode.HARD -> "Blocks the app until midnight — the only way out is closing it"
+                                    BlockingMode.SNOOZE -> "Dismissing gives you 5 more minutes, then the block returns"
+                                    BlockingMode.REMIND -> "Reminds you once each time you open the app"
+                                },
+                                color = textSecondary,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp
+                            )
+                        }
                     }
                 }
             }
@@ -314,6 +357,133 @@ fun LimitsScreen(
                             textPrimary = textPrimary,
                             textSecondary = textSecondary
                         )
+                    }
+                }
+            }
+
+            // Account / cloud backup
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(surface)
+                        .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+                        .padding(24.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("👤", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    "Account",
+                                    fontWeight = FontWeight.Medium,
+                                    color = textPrimary,
+                                    fontSize = 16.sp,
+                                    lineHeight = 22.sp
+                                )
+                                Text(
+                                    signedInUser?.let { it.email.ifEmpty { it.name } }
+                                        ?: "Sign in to back up your stats",
+                                    color = textSecondary,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
+                                )
+                            }
+                        }
+                        val user = signedInUser
+                        if (user == null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(WarmAccent)
+                                    .clickable { onNavigateToSignIn() }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "Sign in with Google",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Cloud backup",
+                                        color = textPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        "Upload daily totals to your private account",
+                                        color = textSecondary,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp
+                                    )
+                                }
+                                WarmToggle(
+                                    checked = cloudSyncEnabled,
+                                    onCheckedChange = { enabled ->
+                                        cloudSyncEnabled = enabled
+                                        sharedPrefs.edit()
+                                            .putBoolean(UsageSyncManager.KEY_ENABLED, enabled)
+                                            .apply()
+                                        if (enabled) {
+                                            scope.launch(Dispatchers.IO) {
+                                                try {
+                                                    UsageSyncManager(
+                                                        context.applicationContext,
+                                                        viewModel.repositoryForSync()
+                                                    ).syncIfEnabled()
+                                                } catch (_: Exception) {
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, cardBorder, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        scope.launch {
+                                            cloudSyncEnabled = false
+                                            sharedPrefs.edit()
+                                                .putBoolean(UsageSyncManager.KEY_ENABLED, false)
+                                                .remove(UsageSyncManager.KEY_LAST_SYNCED)
+                                                .apply()
+                                            if (FirebaseApp.getApps(context).isNotEmpty()) {
+                                                FirebaseAuth.getInstance().signOut()
+                                            }
+                                            AppPreferences.signOut(context)
+                                        }
+                                    }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "Sign out",
+                                    color = textSecondary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -385,6 +555,48 @@ fun LimitsScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BlockingModeSelector(
+    selected: BlockingMode,
+    onSelect: (BlockingMode) -> Unit,
+    trackBg: Color,
+    textSecondary: Color
+) {
+    val options = listOf(
+        BlockingMode.HARD to "🔒  Hard",
+        BlockingMode.SNOOZE to "⏳  Snooze",
+        BlockingMode.REMIND to "💬  Remind",
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(trackBg)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        options.forEach { (mode, label) ->
+            val isSelected = mode == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (isSelected) WarmAccent else Color.Transparent)
+                    .clickable { onSelect(mode) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    label,
+                    color = if (isSelected) Color.White else textSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }

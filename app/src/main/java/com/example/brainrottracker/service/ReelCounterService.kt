@@ -13,6 +13,8 @@ import com.example.brainrottracker.data.local.db.entity.DailyLog
 import com.example.brainrottracker.data.local.db.entity.UserLimits
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.data.repository.UsageRepository
+import com.example.brainrottracker.data.sync.UsageSyncManager
+import com.example.brainrottracker.data.util.ScreenTimeHelper
 import com.example.brainrottracker.notification.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 /**
  * Reel/Shorts counter using VIEW HIERARCHY INSPECTION.
@@ -47,22 +50,42 @@ class ReelCounterService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // Heartbeat that keeps the HUD visible the whole time the user is in a reel feed, and hides
-    // it the moment they leave (the accessibility service gets no events from other apps, so we
-    // can't rely on those to dismiss the pill — we poll the active window instead).
+    // Heartbeat that runs while a tracked app is in the foreground. It keeps the HUD visible
+    // while a reel feed is open, re-evaluates blocking (so an expired snooze re-blocks within
+    // ~1 s), and detects when the user leaves to an untracked app — the accessibility service
+    // gets no events from other apps, so we poll the active window instead. Leaving a tracked
+    // app ends its "foreground session" (used by REMIND-mode blocking dismissals).
     private val HEARTBEAT_MS = 1000L
     private var heartbeatActive = false
+    private var lastForegroundTracked: String? = null
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
             val fg = rootInActiveWindow?.packageName?.toString()
-            val leftReel = fg != null && (Platform.fromPackageName(fg) == null || hasReelPager[fg] != true)
-            if (leftReel) {
+            val fgPlatform = fg?.let { Platform.fromPackageName(it) }
+
+            if (fg != null && fgPlatform == null) {
+                // Left all tracked apps: end the foreground session and stop polling.
+                lastForegroundTracked?.let { FloatingCounterService.instance?.onTrackedAppLeft(it) }
+                lastForegroundTracked = null
                 heartbeatActive = false
                 FloatingCounterService.instance?.hide()
-            } else {
-                FloatingCounterService.instance?.show()
-                mainHandler.postDelayed(this, HEARTBEAT_MS)
+                return
             }
+
+            if (fg != null && fgPlatform != null) {
+                if (fg != lastForegroundTracked) {
+                    lastForegroundTracked?.let { FloatingCounterService.instance?.onTrackedAppLeft(it) }
+                    lastForegroundTracked = fg
+                }
+                if (hasReelPager[fg] == true || fgPlatform == Platform.TIKTOK) {
+                    FloatingCounterService.instance?.show()
+                } else {
+                    FloatingCounterService.instance?.hide()
+                }
+                evaluateBlocking(fgPlatform, fg)
+            }
+            // fg == null means the window couldn't be read — keep polling.
+            mainHandler.postDelayed(this, HEARTBEAT_MS)
         }
     }
 
@@ -89,6 +112,9 @@ class ReelCounterService : AccessibilityService() {
 
     // In-memory reel counts for today
     private val reelCounts = mutableMapOf<String, Int>()
+
+    // The date the in-memory state belongs to; reset at midnight rollover
+    private var currentDay: String = LocalDate.now().toString()
 
     // Cache of daily reel limits for each platform name
     private val limitsCache = mutableMapOf<String, Int>()
@@ -125,6 +151,8 @@ class ReelCounterService : AccessibilityService() {
                     reelCounts[p.packageName] = log.getReelsForPlatform(p)
                 }
             }
+            // Catch up on any days that ended while the service was dead
+            repository.evaluateStreaksUpTo(LocalDate.now().minusDays(1))
         }
 
         serviceScope.launch {
@@ -156,6 +184,7 @@ class ReelCounterService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        checkDayRollover()
         val pkg = event.packageName?.toString() ?: return
         val platform = Platform.fromPackageName(pkg) ?: return
 
@@ -167,6 +196,15 @@ class ReelCounterService : AccessibilityService() {
                 // Do NOT clear state variables here. This prevents resetting signature detection
                 // on minor state transitions (like opening comments or showing overlays).
                 // The layout inspection triggered by subsequent content changes will handle visibility updates.
+
+                // A tracked app reached (or switched within) the foreground: end the previous
+                // app's session, re-check blocking, and start polling for when the user leaves.
+                if (pkg != lastForegroundTracked) {
+                    lastForegroundTracked?.let { FloatingCounterService.instance?.onTrackedAppLeft(it) }
+                    lastForegroundTracked = pkg
+                }
+                evaluateBlocking(platform, pkg)
+                startHeartbeat()
             }
 
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
@@ -619,18 +657,63 @@ class ReelCounterService : AccessibilityService() {
             val health = if (log != null) repository.calculateBrainHealth(log, limits) else 100
             withContext(Dispatchers.Main) {
                 showBubbleAndResetTimer(log, limits, health)
-                maybeShowBlockingOverlay(platform, pkg, newCount)
+                evaluateBlocking(platform, pkg)
             }
             log?.let { notificationHelper.checkMilestone(it.getTotalReels()) }
         }
     }
 
-    private fun maybeShowBlockingOverlay(platform: Platform, pkg: String, count: Int) {
+    /**
+     * Shows the blocking scrim if blocking is on and the platform's count has reached its
+     * limit. Called on every counted reel AND every time the app reaches the foreground, so
+     * the block re-triggers when the user reopens the app. Suppression (snooze, per-session
+     * dismissal) is mode-dependent and handled inside [FloatingCounterService].
+     */
+    private fun evaluateBlocking(platform: Platform, pkg: String) {
         val prefs = getSharedPreferences(FloatingCounterService.PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean("blocking_enabled", false)) return
-        val limit = limitsCache[platform.name] ?: return
+        // Fall back to the entity default so blocking works before any limit was saved
+        val limit = limitsCache[platform.name] ?: 30
+        val count = reelCounts[pkg] ?: 0
         if (count >= limit) {
-            FloatingCounterService.instance?.showBlockingOverlay(platform.displayName, limit)
+            val mode = BlockingMode.fromPref(prefs.getString(BlockingMode.PREF_KEY, null))
+            FloatingCounterService.instance?.showBlockingOverlay(platform, limit, mode)
+        }
+    }
+
+    /**
+     * Detects midnight rollover. In-memory counts are reset, the finished day's streak is
+     * evaluated, a recap notification is shown, and milestone alerts are re-armed. Runs
+     * lazily on the next accessibility event, so a phone that was off at midnight catches
+     * up on the next doomscroll.
+     */
+    private fun checkDayRollover() {
+        val today = LocalDate.now().toString()
+        if (today == currentDay) return
+        val previousDay = currentDay
+        currentDay = today
+        reelCounts.clear()
+        lastCountedMs.clear()
+
+        serviceScope.launch {
+            repository.evaluateStreaksUpTo(LocalDate.now().minusDays(1))
+            // Recap only makes sense right after the day ended, not days later
+            if (LocalDate.parse(previousDay).plusDays(1).toString() == today) {
+                val log = repository.getLogSnapshot(previousDay)
+                val minutes = ScreenTimeHelper.getYesterdayMinutesByPlatform(applicationContext)
+                    .values.sum()
+                notificationHelper.showDailySummary(
+                    totalReels = log?.getTotalReels() ?: 0,
+                    totalMinutes = minutes,
+                    brainHealth = log?.brainHealthScore ?: 100
+                )
+            }
+            notificationHelper.resetDailyMilestones()
+            // Push the finished day to the cloud (no-op unless signed in with backup on)
+            try {
+                UsageSyncManager(applicationContext, repository).syncIfEnabled()
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -652,6 +735,11 @@ class ReelCounterService : AccessibilityService() {
     /** Show the pill and keep it visible (via the heartbeat) for as long as a reel feed is open. */
     private fun keepBubbleVisible() {
         FloatingCounterService.instance?.show()
+        startHeartbeat()
+    }
+
+    /** Start the foreground-polling heartbeat without forcing the pill to show. */
+    private fun startHeartbeat() {
         if (!heartbeatActive) {
             heartbeatActive = true
             mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_MS)
@@ -659,8 +747,8 @@ class ReelCounterService : AccessibilityService() {
     }
 
     private fun hideBubble() {
-        heartbeatActive = false
-        mainHandler.removeCallbacks(heartbeatRunnable)
+        // The heartbeat keeps running: it manages pill visibility and foreground-session
+        // tracking itself, and stops when the user leaves all tracked apps.
         FloatingCounterService.instance?.hide()
     }
 }

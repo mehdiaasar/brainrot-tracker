@@ -38,18 +38,8 @@ interface DailyLogDao {
     @Query("UPDATE daily_logs SET snapchatSpotlights = snapchatSpotlights + 1 WHERE date = :date")
     suspend fun incrementSnapchatSpotlights(date: String)
 
-    // Per-platform minute addition queries
-    @Query("UPDATE daily_logs SET instagramMinutes = instagramMinutes + :minutes WHERE date = :date")
-    suspend fun addInstagramMinutes(date: String, minutes: Int)
-
-    @Query("UPDATE daily_logs SET youtubeMinutes = youtubeMinutes + :minutes WHERE date = :date")
-    suspend fun addYoutubeMinutes(date: String, minutes: Int)
-
-    @Query("UPDATE daily_logs SET tiktokMinutes = tiktokMinutes + :minutes WHERE date = :date")
-    suspend fun addTiktokMinutes(date: String, minutes: Int)
-
-    @Query("UPDATE daily_logs SET snapchatMinutes = snapchatMinutes + :minutes WHERE date = :date")
-    suspend fun addSnapchatMinutes(date: String, minutes: Int)
+    @Query("SELECT MIN(date) FROM daily_logs")
+    suspend fun getEarliestDate(): String?
 
     @Query("UPDATE daily_logs SET brainHealthScore = :score WHERE date = :date")
     suspend fun updateBrainHealthScore(date: String, score: Int)

@@ -53,12 +53,15 @@ import com.example.brainrottracker.theme.WarmLightBackground
 import com.example.brainrottracker.theme.WarmLightBorder
 import com.example.brainrottracker.theme.WarmLightTextSecondary
 import com.example.brainrottracker.theme.WarmTextSecondary
+import com.example.brainrottracker.data.local.prefs.AppPreferences
 import com.example.brainrottracker.theme.rememberIsDark
 import com.example.brainrottracker.ui.screens.dashboard.DashboardScreen
 import com.example.brainrottracker.ui.screens.limits.LimitsScreen
 import com.example.brainrottracker.ui.screens.onboarding.OnboardingScreen
+import com.example.brainrottracker.ui.screens.signin.GoogleSignInScreen
 import com.example.brainrottracker.ui.screens.stats.StatsScreen
 import com.example.brainrottracker.ui.screens.streaks.StreaksScreen
+import kotlinx.coroutines.flow.first
 
 data class BottomNavItem(
     val key: NavKey,
@@ -66,7 +69,7 @@ data class BottomNavItem(
     val icon: ImageVector,
 )
 
-private data class InitState(val accessibilityEnabled: Boolean)
+private data class InitState(val accessibilityEnabled: Boolean, val signedIn: Boolean)
 
 @Composable
 fun MainNavigation() {
@@ -76,7 +79,7 @@ fun MainNavigation() {
     val navBorder = if (dark) WarmBorder else WarmLightBorder
     val inactiveColor = if (dark) WarmTextSecondary else WarmLightTextSecondary
 
-    // Read sign-in state from DataStore asynchronously before building the nav back stack.
+    // Read startup state asynchronously before building the nav back stack.
     // We only need the first emission — once we know where to start, we stop collecting.
     val initState by produceState<InitState?>(initialValue = null) {
         val accessibilityEnabled = try {
@@ -86,7 +89,8 @@ fun MainNavigation() {
             ) ?: ""
             enabledServices.contains(context.packageName)
         } catch (_: Exception) { false }
-        value = InitState(accessibilityEnabled)
+        val signedIn = AppPreferences.isSignedInFlow(context).first()
+        value = InitState(accessibilityEnabled, signedIn)
     }
 
     // Show a blank matching-color splash while DataStore emits the first value
@@ -111,7 +115,9 @@ fun MainNavigation() {
         BottomNavItem(Streaks, "Streaks", Icons.Filled.LocalFireDepartment),
     )
 
-    val showBottomBar = currentDestination != Onboarding
+    // Hide the bar on full-screen flows (onboarding, sign-in)
+    val topKey = backStack.lastOrNull()
+    val showBottomBar = topKey != Onboarding && topKey != GoogleSignIn
 
     Scaffold(
         containerColor = navBg,
@@ -182,8 +188,16 @@ fun MainNavigation() {
                                 while (backStack.size > 1) backStack.removeLastOrNull()
                                 backStack.removeLastOrNull()
                                 backStack += Dashboard
+                                // Offer the optional sign-in once after onboarding
+                                if (initState?.signedIn == false) backStack += GoogleSignIn
                             },
                             modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                    entry<GoogleSignIn> {
+                        GoogleSignInScreen(
+                            onSignInSuccess = { backStack.removeLastOrNull() },
+                            onSkip = { backStack.removeLastOrNull() }
                         )
                     }
                     entry<Dashboard> {
@@ -193,7 +207,7 @@ fun MainNavigation() {
                         StatsScreen()
                     }
                     entry<Limits> {
-                        LimitsScreen()
+                        LimitsScreen(onNavigateToSignIn = { backStack += GoogleSignIn })
                     }
                     entry<Streaks> {
                         StreaksScreen()

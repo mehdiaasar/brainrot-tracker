@@ -8,6 +8,5 @@ data class StreakRecord(
     @PrimaryKey
     val date: String,
     val underLimit: Boolean,
-    val streakDay: Int,
-    val freezeUsed: Boolean = false
+    val streakDay: Int
 )

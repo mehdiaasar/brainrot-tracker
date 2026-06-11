@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,6 +39,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -80,18 +83,21 @@ fun DashboardScreen(
     val textPrimary = if (dark) WarmText else WarmLightText
     val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
 
+    val context = LocalContext.current
     val todayLog by viewModel.todayLog.collectAsState()
     val brainHealth by viewModel.brainHealth.collectAsState()
     val insightsList by viewModel.insights.collectAsState()
     val screenTimeToday by viewModel.screenTimeToday.collectAsState()
 
-    // Re-read the accessibility service state whenever the screen resumes, so the
-    // badge reflects the user toggling tracking in system settings.
     val lifecycleOwner = LocalLifecycleOwner.current
     var isTracking by remember { mutableStateOf(ReelCounterService.isRunning) }
+    var hasUsagePermission by remember { mutableStateOf(com.example.brainrottracker.data.util.ScreenTimeHelper.hasPermission(context)) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) isTracking = ReelCounterService.isRunning
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isTracking = ReelCounterService.isRunning
+                hasUsagePermission = com.example.brainrottracker.data.util.ScreenTimeHelper.hasPermission(context)
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -169,6 +175,41 @@ fun DashboardScreen(
                             letterSpacing = 1.5.sp
                         )
                     }
+                }
+            }
+        }
+
+        // Usage Access banner — shown only when permission is missing
+        if (!hasUsagePermission) {
+            item {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 12.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(trackBg)
+                        .clickable {
+                            context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                        }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Grant Usage Access",
+                            fontWeight = FontWeight.Medium,
+                            color = textPrimary,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Required to show screen time",
+                            color = textSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Text("→", color = WarmAccent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

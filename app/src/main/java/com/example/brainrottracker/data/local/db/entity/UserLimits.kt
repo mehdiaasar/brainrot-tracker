@@ -8,6 +8,5 @@ data class UserLimits(
     @PrimaryKey
     val platform: String,
     val dailyReelLimit: Int = 30,
-    val dailyMinuteLimit: Int = 60,
-    val blockingEnabled: Boolean = true
+    val dailyMinuteLimit: Int = 60
 )
