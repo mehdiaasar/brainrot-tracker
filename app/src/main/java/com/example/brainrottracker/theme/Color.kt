@@ -68,6 +68,15 @@ val WarmLightInner = Color(0xFFEBE6DF)
 val WarmLightText = Color(0xFF141413)
 val WarmLightTextSecondary = Color(0xFF6C6A64)
 
+// Insight card (dashboard) — soft lavender in light, muted indigo in dark
+val WarmInsightBg = Color(0xFFEFE7FA)
+val WarmInsightAccent = Color(0xFF8B5CF6)
+val WarmInsightBgDark = Color(0xFF272233)
+val WarmInsightAccentDark = Color(0xFFB89BF0)
+
+// Daily-goal "on track" blue
+val WarmGoalBlue = Color(0xFF3B82F6)
+
 // Stats chart colors (consistent across light/dark)
 val StatsChartTikTok = Color(0xFFCC785C)
 val StatsChartYouTube = Color(0xFFC64545)

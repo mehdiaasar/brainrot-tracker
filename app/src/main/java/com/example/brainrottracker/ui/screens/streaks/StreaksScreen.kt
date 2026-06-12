@@ -1,5 +1,6 @@
 package com.example.brainrottracker.ui.screens.streaks
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.painterResource
+import com.example.brainrottracker.R
 import com.example.brainrottracker.theme.WarmAccent
 import com.example.brainrottracker.theme.rememberIsDark
 import com.example.brainrottracker.theme.WarmBackground
@@ -113,30 +116,46 @@ fun StreaksScreen(
                     .clip(RoundedCornerShape(16.dp))
                     .background(surface)
                     .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
-                    .padding(32.dp),
+                    .padding(horizontal = 24.dp, vertical = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("🔥", fontSize = 32.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "${state.currentStreak}",
-                        color = textPrimary,
-                        fontSize = 64.sp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 67.sp,
-                        letterSpacing = (-1.5).sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "DAY STREAK",
-                        color = textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 1.5.sp
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("🔥", fontSize = 32.sp)
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "${state.currentStreak}",
+                                color = textPrimary,
+                                fontSize = 64.sp,
+                                fontWeight = FontWeight.Normal,
+                                lineHeight = 67.sp,
+                                letterSpacing = (-1.5).sp
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "DAY STREAK",
+                                color = textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = 1.5.sp
+                            )
+                        }
+                        // The streak warrior cheers you on
+                        Image(
+                            painterResource(R.drawable.char_warrior),
+                            contentDescription = null,
+                            modifier = Modifier.size(132.dp)
+                        )
+                    }
                     Spacer(Modifier.height(32.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -272,17 +291,27 @@ fun StreaksScreen(
 
         // Achievements header
         item {
-            Text(
-                "Achievements",
-                fontWeight = FontWeight.Medium,
-                color = textPrimary,
-                fontSize = 18.sp,
-                lineHeight = 25.sp,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 8.dp)
-            )
+                    .padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Achievements",
+                    fontWeight = FontWeight.Medium,
+                    color = textPrimary,
+                    fontSize = 18.sp,
+                    lineHeight = 25.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Image(
+                    painterResource(R.drawable.char_trophy),
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp)
+                )
+            }
         }
 
         // Achievement items

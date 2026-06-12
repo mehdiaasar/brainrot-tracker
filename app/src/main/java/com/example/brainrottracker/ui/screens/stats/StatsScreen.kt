@@ -1,6 +1,7 @@
 package com.example.brainrottracker.ui.screens.stats
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +35,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brainrottracker.R
 import com.example.brainrottracker.data.local.db.entity.DailyLog
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.ui.components.BrainMascot
@@ -111,10 +114,17 @@ fun StatsScreen(
                         if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                         else Modifier
                     )
-                    .padding(32.dp),
+                    .padding(horizontal = 24.dp, vertical = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(width = 200.dp, height = 110.dp),
@@ -169,6 +179,15 @@ fun StatsScreen(
                         fontWeight = FontWeight.Medium,
                         letterSpacing = 1.5.sp
                     )
+                }
+                Image(
+                    painterResource(
+                        if (stats.productivityScore >= 50) R.drawable.char_excited
+                        else R.drawable.char_overwhelmed
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(96.dp)
+                )
                 }
             }
         }
@@ -267,6 +286,7 @@ fun StatsScreen(
                     labelColor = WarmGrantedGreen,
                     dayName = getDayName(stats.bestDay?.date),
                     count = "${stats.bestDay?.getTotalReels() ?: 0} videos",
+                    charRes = R.drawable.char_proud,
                     modifier = Modifier.weight(1f),
                     surface = surface,
                     cardBorder = cardBorder,
@@ -279,6 +299,7 @@ fun StatsScreen(
                     labelColor = WarmError,
                     dayName = getDayName(stats.worstDay?.date),
                     count = "${stats.worstDay?.getTotalReels() ?: 0} videos",
+                    charRes = R.drawable.char_overwhelmed,
                     modifier = Modifier.weight(1f),
                     surface = surface,
                     cardBorder = cardBorder,
@@ -529,6 +550,7 @@ private fun BestWorstCard(
     labelColor: Color,
     dayName: String,
     count: String,
+    charRes: Int,
     modifier: Modifier,
     surface: Color,
     cardBorder: Color,
@@ -546,24 +568,31 @@ private fun BestWorstCard(
             )
             .padding(16.dp)
     ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(labelColor)
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    label.uppercase(),
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 1.5.sp
-                )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Column(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(labelColor)
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        label.uppercase(),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 1.5.sp
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(dayName, fontWeight = FontWeight.Medium, color = textPrimary, fontSize = 16.sp, lineHeight = 22.sp)
+                Text(count, color = textSecondary, fontSize = 14.sp, lineHeight = 22.sp)
             }
-            Spacer(Modifier.height(12.dp))
-            Text(dayName, fontWeight = FontWeight.Medium, color = textPrimary, fontSize = 16.sp, lineHeight = 22.sp)
-            Text(count, color = textSecondary, fontSize = 14.sp, lineHeight = 22.sp)
+            Image(
+                painterResource(charRes),
+                contentDescription = null,
+                modifier = Modifier.size(56.dp)
+            )
         }
     }
 }

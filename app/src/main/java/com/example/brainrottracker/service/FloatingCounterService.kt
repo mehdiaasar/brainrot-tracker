@@ -32,10 +32,14 @@ import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb
+import com.example.brainrottracker.R
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.notification.NotificationHelper
+import com.example.brainrottracker.ui.screens.dashboard.DashboardMood
 
 /**
  * Floating HUD overlay: a rounded pill showing a brain mascot that degrades with brain health
@@ -50,7 +54,7 @@ class FloatingCounterService : Service() {
     private var windowManager: WindowManager? = null
     private var rootView: FrameLayout? = null
     private var pill: LinearLayout? = null
-    private var brainView: BrainFaceView? = null
+    private var brainView: ImageView? = null
     private var countTextView: TextView? = null
 
     private var layoutParams: WindowManager.LayoutParams? = null
@@ -65,6 +69,8 @@ class FloatingCounterService : Service() {
     private var currentTotal = 0
     private var currentHealth = 100
     private var currentBreakdown: List<HudPlatform> = emptyList()
+    // Same 5-variation brain concept as the dashboard, picked from today's usage ratio.
+    private var currentMood: DashboardMood = DashboardMood.GREAT
 
     // Resolved appearance (recomputed from prefs on each show()).
     private var isDark = true
@@ -90,6 +96,8 @@ class FloatingCounterService : Service() {
         const val KEY_SCALE = "hud_scale"
         const val KEY_THEME = "theme_mode"
         const val DEFAULT_SCALE = 1.2f
+        /** How far the oversized Brain bleeds beyond the capsule, in dp (pre-scale). */
+        private const val BLEED_DP = 30f
 
         var instance: FloatingCounterService? = null
             private set
@@ -117,7 +125,12 @@ class FloatingCounterService : Service() {
             val ratio = if (limit > 0) count.toFloat() / limit else 0f
             val health = ((1f - ratio).coerceIn(0f, 1f) * 100).toInt()
             val p = Platform.entries.find { it.displayName == name }
-            updateHud(count, health, if (p != null) listOf(HudPlatform(p, count, limit)) else emptyList())
+            updateHud(
+                count,
+                health,
+                if (p != null) listOf(HudPlatform(p, count, limit)) else emptyList(),
+                ratio
+            )
             show()
         }
         return START_STICKY
@@ -154,7 +167,9 @@ class FloatingCounterService : Service() {
         val context = this
         rootView = FrameLayout(context)
 
-        brainView = BrainFaceView(context).apply { health = currentHealth }
+        brainView = ImageView(context).apply {
+            setImageResource(currentMood.mainRes)
+        }
         countTextView = TextView(context).apply {
             text = "0"
             setTypeface(Typeface.DEFAULT_BOLD)
@@ -164,22 +179,20 @@ class FloatingCounterService : Service() {
         pill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            // No elevation: the shadow is what produced the translucent rectangular "film".
-            // A slight rounded-rect outline keeps content corners crisp.
-            val corner = dp(14f).toFloat()
-            outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, corner)
-                }
-            }
-            clipToOutline = true
+            // Children are NOT clipped, so the oversized Brain can bleed beyond the capsule
+            // and "appear big" without enlarging the capsule itself.
+            clipToOutline = false
+            clipChildren = false
+            clipToPadding = false
             addView(brainView)
             addView(countTextView)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
-            )
+            ).apply { gravity = Gravity.CENTER }
         }
+        rootView?.clipChildren = false
+        rootView?.clipToPadding = false
         rootView?.addView(pill)
         applyPillAppearance()
 
@@ -208,23 +221,42 @@ class FloatingCounterService : Service() {
 
     /** Push the resolved theme + scale onto the pill's views. */
     private fun applyPillAppearance() {
-        brainView?.layoutParams = LinearLayout.LayoutParams(dp(30f * scale), dp(30f * scale))
+        applyBrainSize()
         countTextView?.apply {
             textSize = 22f * scale
-            setTextColor(accentColor)
+            setTextColor(currentMood.accent.toArgb())
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { leftMargin = dp(10f * scale) }
+            ).apply { leftMargin = dp(8f * scale) }
         }
         pill?.apply {
-            setPadding(dp(16f * scale), dp(10f * scale), dp(20f * scale), dp(10f * scale))
+            setPadding(dp(16f * scale), dp(8f * scale), dp(18f * scale), dp(8f * scale))
             background = GradientDrawable().apply {
-                cornerRadius = dp(14f).toFloat()
+                cornerRadius = dp(16f).toFloat()
                 setColor(surfaceColor)
                 setStroke(dp(1f), borderColor)
             }
             requestLayout()
+        }
+        // The overlay window wraps the root view, so pad it to leave room for the bleeding
+        // Brain (otherwise the window edge would clip it). The capsule still looks compact.
+        val bleed = dp(BLEED_DP * scale)
+        rootView?.setPadding(bleed, bleed, 0, bleed)
+    }
+
+    /**
+     * Size the pill Brain. It bleeds out of the compact capsule via negative margins. The
+     * first variation ("great") art reads ~20% larger than the others, so it is trimmed to match.
+     */
+    private fun applyBrainSize() {
+        val base = if (currentMood == DashboardMood.GREAT) 68f else 85f
+        val brainSize = dp(base * scale)
+        val bleed = dp(BLEED_DP * scale)
+        brainView?.layoutParams = LinearLayout.LayoutParams(brainSize, brainSize).apply {
+            topMargin = -bleed
+            bottomMargin = -bleed
+            leftMargin = -bleed
         }
     }
 
@@ -321,17 +353,26 @@ class FloatingCounterService : Service() {
     }
 
     /**
-     * Update the pill with today's [total] reel count, overall brain [health] (0..100), and the
-     * per-platform [breakdown] used to populate the tap-to-open popup.
+     * Update the pill with today's [total] reel count, overall brain [health] (0..100), the
+     * per-platform [breakdown] used to populate the tap-to-open popup, and the usage [reelRatio]
+     * (today's reels / daily limit) that picks the 5-variation mood — mirroring the dashboard.
+     * When [reelRatio] is negative it is derived from [health] as a fallback.
      */
-    fun updateHud(total: Int, health: Int, breakdown: List<HudPlatform>) {
+    fun updateHud(total: Int, health: Int, breakdown: List<HudPlatform>, reelRatio: Float = -1f) {
         mainHandler.post {
             currentTotal = total
             currentHealth = health.coerceIn(0, 100)
             currentBreakdown = breakdown
+            val ratio = if (reelRatio >= 0f) reelRatio else (1f - currentHealth / 100f)
+            currentMood = DashboardMood.fromUsage(ratio, 0f)
 
             countTextView?.text = "$total"
-            brainView?.health = currentHealth
+            countTextView?.setTextColor(currentMood.accent.toArgb())
+            brainView?.setImageResource(currentMood.mainRes)
+            // Re-apply per-mood size (the "great" art is trimmed); show() may skip this when
+            // the pill is already on screen and the mood changes mid-session.
+            applyBrainSize()
+            brainView?.requestLayout()
 
             // Gentle pulse when the brain is in a bad way.
             if (currentHealth < 25) {
@@ -408,12 +449,12 @@ class FloatingCounterService : Service() {
     private fun buildPopupCard(): View {
         val ctx = this
         val healthLabel = when {
-            currentHealth >= 90 -> "Elite"
-            currentHealth >= 75 -> "Healthy"
-            currentHealth >= 50 -> "Tired"
-            currentHealth >= 25 -> "Overstimulated"
-            else -> "Brainrot"
+            currentHealth >= 75 -> "HEALTHY"
+            currentHealth >= 50 -> "MODERATE"
+            currentHealth >= 25 -> "POOR"
+            else -> "VERY POOR"
         }
+        val moodAccent = currentMood.accent.toArgb()
 
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -426,38 +467,57 @@ class FloatingCounterService : Service() {
             setOnClickListener { } // consume taps so they don't reach the scrim
         }
 
-        // Header: brain face + health summary.
+        // Header: the dashboard's mood Brain + its headline/bubble copy.
         val header = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        header.addView(BrainFaceView(ctx).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(56f), dp(56f))
-            health = currentHealth
+        header.addView(ImageView(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(72f), dp(72f))
+            setImageResource(currentMood.mainRes)
         })
         header.addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 .apply { leftMargin = dp(14f) }
             addView(TextView(ctx).apply {
-                text = "Brain Health"
-                setTextColor(textSecondaryColor)
-                textSize = 12f
+                text = currentMood.headline
+                setTextColor(textColor)
+                textSize = 18f
+                setTypeface(Typeface.DEFAULT_BOLD)
             })
             addView(TextView(ctx).apply {
-                text = "$currentHealth% · $healthLabel"
-                setTextColor(textColor)
-                textSize = 20f
-                setTypeface(Typeface.DEFAULT_BOLD)
+                text = currentMood.bubble
+                setTextColor(textSecondaryColor)
+                textSize = 13f
+                setPadding(0, dp(4f), 0, 0)
             })
         })
         card.addView(header)
 
-        card.addView(TextView(ctx).apply {
-            text = "$currentTotal reels scrolled today"
-            setTextColor(textSecondaryColor)
-            textSize = 13f
-            setPadding(0, dp(14f), 0, dp(10f))
+        // Score + reels summary row, styled like the dashboard's score ring + count.
+        card.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(16f), 0, dp(10f))
+            addView(TextView(ctx).apply {
+                text = "$currentHealth"
+                setTextColor(moodAccent)
+                textSize = 30f
+                setTypeface(Typeface.DEFAULT_BOLD)
+            })
+            addView(TextView(ctx).apply {
+                text = "  $healthLabel"
+                setTextColor(textSecondaryColor)
+                textSize = 12f
+                setTypeface(Typeface.DEFAULT_BOLD)
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(TextView(ctx).apply {
+                text = "$currentTotal reels today"
+                setTextColor(textSecondaryColor)
+                textSize = 13f
+            })
         })
 
         if (currentBreakdown.isEmpty()) {
@@ -619,18 +679,19 @@ class FloatingCounterService : Service() {
             setOnClickListener { }
         }
 
-        card.addView(TextView(this).apply {
-            text = "🚫"
-            textSize = 40f
-            gravity = Gravity.CENTER
+        // Severe usage → the dashboard's "limit reached" Brain variation and its headline.
+        val blockMood = DashboardMood.LIMIT
+        card.addView(ImageView(this).apply {
+            setImageResource(blockMood.mainRes)
+            adjustViewBounds = true
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(140f)
             ).apply { bottomMargin = dp(12f) }
         })
 
         card.addView(TextView(this).apply {
-            text = "Limit Reached"
+            text = blockMood.headline
             setTextColor(textColor)
             textSize = 22f
             setTypeface(Typeface.DEFAULT_BOLD)
@@ -748,98 +809,6 @@ class FloatingCounterService : Service() {
     }
 
     // ── Custom views ──────────────────────────────────────────────────────────
-
-    /**
-     * An original, Canvas-drawn cartoon brain face that morphs with [health]: bright pink and
-     * wide-eyed when healthy, grey and droopy when rotten. Mirrors the Compose `BrainMascot`.
-     */
-    class BrainFaceView(context: Context) : View(context) {
-        var health: Int = 100
-            set(value) {
-                field = value.coerceIn(0, 100)
-                invalidate()
-            }
-
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val t = health / 100f
-            val w = width.toFloat()
-            val h = height.toFloat()
-            val cx = w / 2f
-            // headCy/headR tuned so the topmost bump (headCy - 1.25*headR) stays >= 0, i.e. the
-            // brain is fully inside the view instead of being clipped at the top.
-            val headR = w * 0.40f
-            val headCy = h * 0.52f
-
-            val brainColor = lerpColor(0xFFB2A9A6.toInt(), 0xFFE78BA6.toInt(), t)
-            val foldColor = lerpColor(brainColor, Color.BLACK, 0.18f)
-
-            paint.style = Paint.Style.FILL
-            paint.color = brainColor
-            val bumps = arrayOf(
-                floatArrayOf(cx - headR * 0.6f, headCy - headR * 0.3f, headR * 0.55f),
-                floatArrayOf(cx - headR * 0.18f, headCy - headR * 0.7f, headR * 0.55f),
-                floatArrayOf(cx + headR * 0.28f, headCy - headR * 0.68f, headR * 0.55f),
-                floatArrayOf(cx + headR * 0.62f, headCy - headR * 0.26f, headR * 0.52f),
-                floatArrayOf(cx + headR * 0.56f, headCy + headR * 0.3f, headR * 0.5f),
-                floatArrayOf(cx - headR * 0.56f, headCy + headR * 0.32f, headR * 0.5f),
-                floatArrayOf(cx, headCy, headR * 0.95f)
-            )
-            bumps.forEach { canvas.drawCircle(it[0], it[1], it[2], paint) }
-
-            paint.style = Paint.Style.STROKE
-            paint.strokeCap = Paint.Cap.ROUND
-            paint.strokeWidth = headR * 0.08f
-            paint.color = foldColor
-            canvas.drawLine(cx, headCy - headR * 0.8f, cx, headCy + headR * 0.5f, paint)
-            val left = Path().apply {
-                moveTo(cx - headR * 0.6f, headCy - headR * 0.1f)
-                quadTo(cx - headR * 0.3f, headCy - headR * 0.3f, cx - headR * 0.34f, headCy + headR * 0.16f)
-            }
-            val right = Path().apply {
-                moveTo(cx + headR * 0.6f, headCy - headR * 0.1f)
-                quadTo(cx + headR * 0.3f, headCy - headR * 0.3f, cx + headR * 0.34f, headCy + headR * 0.16f)
-            }
-            canvas.drawPath(left, paint)
-            canvas.drawPath(right, paint)
-
-            val eyeOpen = 0.16f + 0.84f * t
-            val eyeR = headR * 0.3f
-            val eyeY = headCy + headR * 0.02f
-            val eyeDx = headR * 0.42f
-            drawEye(canvas, cx - eyeDx, eyeY, eyeR, eyeOpen, t)
-            drawEye(canvas, cx + eyeDx, eyeY, eyeR, eyeOpen, t)
-
-            val mouth = ((t - 0.45f) * 2f).coerceIn(-1f, 1f)
-            val mouthY = headCy + headR * 0.58f
-            val mouthW = headR * 0.7f
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = headR * 0.1f
-            paint.color = lerpColor(foldColor, Color.BLACK, 0.3f)
-            val mPath = Path().apply {
-                moveTo(cx - mouthW / 2f, mouthY)
-                quadTo(cx, mouthY + mouth * headR * 0.34f, cx + mouthW / 2f, mouthY)
-            }
-            canvas.drawPath(mPath, paint)
-        }
-
-        private fun drawEye(canvas: Canvas, x: Float, y: Float, r: Float, open: Float, t: Float) {
-            val ballH = r * 2f * open
-            paint.style = Paint.Style.FILL
-            paint.color = Color.WHITE
-            canvas.drawOval(x - r, y - ballH / 2f, x + r, y + ballH / 2f, paint)
-            val pupilR = (r * 0.62f).coerceAtMost(ballH / 2f)
-            val py = y + (r - ballH / 2f) * 0.5f
-            paint.color = 0xFF1A1A1A.toInt()
-            canvas.drawCircle(x, py, pupilR, paint)
-            if (t > 0.55f) {
-                paint.color = Color.WHITE
-                canvas.drawCircle(x - pupilR * 0.3f, py - pupilR * 0.35f, pupilR * 0.32f, paint)
-            }
-        }
-    }
 
     /**
      * Original Canvas-drawn renditions of each platform logo. Mirrors the Compose `PlatformLogo`
@@ -961,14 +930,4 @@ class FloatingCounterService : Service() {
             canvas.drawCircle(s * 0.57f, s * 0.42f, s * 0.03f, paint)
         }
     }
-}
-
-private fun lerpColor(a: Int, b: Int, t: Float): Int {
-    val f = t.coerceIn(0f, 1f)
-    return Color.argb(
-        (Color.alpha(a) + (Color.alpha(b) - Color.alpha(a)) * f).toInt(),
-        (Color.red(a) + (Color.red(b) - Color.red(a)) * f).toInt(),
-        (Color.green(a) + (Color.green(b) - Color.green(a)) * f).toInt(),
-        (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * f).toInt()
-    )
 }

@@ -728,7 +728,10 @@ class ReelCounterService : AccessibilityService() {
                 FloatingCounterService.HudPlatform(p, c, limit)
             } else null
         }
-        FloatingCounterService.instance?.updateHud(total, health, breakdown)
+        // Same reel-ratio the dashboard uses to choose the brain variation.
+        val reelLimit = limits.firstOrNull()?.dailyReelLimit ?: 50
+        val reelRatio = if (reelLimit > 0) total.toFloat() / reelLimit else 0f
+        FloatingCounterService.instance?.updateHud(total, health, breakdown, reelRatio)
         keepBubbleVisible()
     }
 

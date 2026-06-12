@@ -143,4 +143,7 @@ dependencies {
 
   // Material Icons Extended
   implementation(libs.androidx.compose.material.icons.extended)
+
+  // Coil (Google profile avatar)
+  implementation(libs.coil.compose)
 }

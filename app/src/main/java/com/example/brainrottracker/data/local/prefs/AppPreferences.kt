@@ -21,7 +21,7 @@ object AppPreferences {
     private val USER_NAME      = stringPreferencesKey("user_name")
     private val USER_PHOTO_URL = stringPreferencesKey("user_photo_url")
 
-    data class SignedInUser(val email: String, val name: String)
+    data class SignedInUser(val email: String, val name: String, val photoUrl: String? = null)
 
     fun isSignedInFlow(context: Context): Flow<Boolean> =
         context.dataStore.data
@@ -33,7 +33,11 @@ object AppPreferences {
             .catch { emit(emptyPreferences()) }
             .map { prefs ->
                 if (prefs[IS_SIGNED_IN] == true) {
-                    SignedInUser(prefs[USER_EMAIL] ?: "", prefs[USER_NAME] ?: "")
+                    SignedInUser(
+                        prefs[USER_EMAIL] ?: "",
+                        prefs[USER_NAME] ?: "",
+                        prefs[USER_PHOTO_URL]?.ifEmpty { null }
+                    )
                 } else null
             }
 

@@ -61,13 +61,7 @@ fun BrainMascot(
         else -> BrainMood.ROT
     }
 
-    val drawableRes = when (state) {
-        BrainMood.HEALTHY -> R.drawable.brain_healthy
-        BrainMood.TIRED -> R.drawable.brain_tired
-        BrainMood.OVERSTIMULATED -> R.drawable.brain_overstimulated
-        BrainMood.CRITICAL -> R.drawable.brain_critical
-        BrainMood.ROT -> R.drawable.brain_rot
-    }
+    val drawableRes = brainMoodDrawable(h)
 
     // ── Idle bob + breathing (squash & stretch) ──────────────────────────
     val infinite = rememberInfiniteTransition(label = "idle")
@@ -161,3 +155,15 @@ fun BrainMascot(
 }
 
 private enum class BrainMood { HEALTHY, TIRED, OVERSTIMULATED, CRITICAL, ROT }
+
+/**
+ * The mascot artwork for a brain-health score — shared by the in-app mascot,
+ * the floating HUD, and the home-screen widget so they always agree.
+ */
+fun brainMoodDrawable(health: Int): Int = when {
+    health >= 75 -> R.drawable.brain_healthy
+    health >= 50 -> R.drawable.brain_tired
+    health >= 25 -> R.drawable.brain_overstimulated
+    health >= 10 -> R.drawable.brain_critical
+    else -> R.drawable.brain_rot
+}

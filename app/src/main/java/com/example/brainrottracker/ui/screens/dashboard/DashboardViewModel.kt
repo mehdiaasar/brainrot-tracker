@@ -69,6 +69,41 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val isTrackingActive: Boolean
         get() = ReelCounterService.isRunning
 
+    /** Daily video limit shown on the dashboard (matches the Limits screen default). */
+    val reelLimit: StateFlow<Int> = limits
+        .map { it.firstOrNull()?.dailyReelLimit ?: 50 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 50)
+
+    /** Daily time limit in minutes. */
+    val minuteLimit: StateFlow<Int> = limits
+        .map { it.firstOrNull()?.dailyMinuteLimit ?: 60 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 60)
+
+    /** today's reels / minutes expressed as a fraction of their daily limits. */
+    private val usageRatios: Flow<Pair<Float, Float>> = combine(
+        todayLog, reelLimit, minuteLimit, screenTimeToday
+    ) { log, reels, minutes, screenMins ->
+        val reelRatio =
+            if (reels > 0) (log?.getTotalReels() ?: 0) / reels.toFloat() else 0f
+        val minuteRatio = if (minutes > 0) screenMins / minutes.toFloat() else 0f
+        reelRatio to minuteRatio
+    }
+
+    /** Which of the five dashboard variations to show, from usage vs. limits. */
+    val mood: StateFlow<DashboardMood> = usageRatios
+        .map { (reelRatio, minuteRatio) -> DashboardMood.fromUsage(reelRatio, minuteRatio) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardMood.GREAT)
+
+    /** Focus Shield protection level + status, from the same usage ratios as [mood]. */
+    val focusShield: StateFlow<FocusShield> = usageRatios
+        .map { (reelRatio, minuteRatio) -> FocusShield.fromUsage(reelRatio, minuteRatio) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FocusShield(ShieldStatus.ACTIVE, 100))
+
+    /** Daily-goal tracker: true while both reels and minutes are under their limits. */
+    val dailyGoalOnTrack: StateFlow<Boolean> = usageRatios
+        .map { (reelRatio, minuteRatio) -> reelRatio < 1f && minuteRatio < 1f }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val yesterdayLog: StateFlow<DailyLog?> =
         repository.getLogForDate(LocalDate.now().minusDays(1).toString())
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

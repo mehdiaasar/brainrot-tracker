@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -111,9 +110,20 @@ fun MainNavigation() {
     val bottomNavItems = listOf(
         BottomNavItem(Dashboard, "Dashboard", Icons.Filled.Dashboard),
         BottomNavItem(Stats, "Stats", Icons.Filled.BarChart),
-        BottomNavItem(Limits, "Goals", Icons.Filled.TrackChanges),
         BottomNavItem(Streaks, "Streaks", Icons.Filled.LocalFireDepartment),
     )
+
+    // Switch to a top-level tab, collapsing any pushed sub-screens (e.g. Settings).
+    val selectTab: (NavKey) -> Unit = { key ->
+        if (currentDestination != key) {
+            currentDestination = key
+            while (backStack.size > 1) backStack.removeLastOrNull()
+            backStack.removeLastOrNull()
+            backStack += key
+        }
+    }
+    // Settings is the relocated "Goals"/Limits screen, opened from the dashboard profile photo.
+    val openSettings: () -> Unit = { if (backStack.lastOrNull() != Limits) backStack += Limits }
 
     // Hide the bar on full-screen flows (onboarding, sign-in)
     val topKey = backStack.lastOrNull()
@@ -145,14 +155,7 @@ fun MainNavigation() {
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
-                                    ) {
-                                        if (currentDestination != item.key) {
-                                            currentDestination = item.key
-                                            while (backStack.size > 1) backStack.removeLastOrNull()
-                                            backStack.removeLastOrNull()
-                                            backStack += item.key
-                                        }
-                                    }
+                                    ) { selectTab(item.key) }
                                     .padding(horizontal = 16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -201,7 +204,11 @@ fun MainNavigation() {
                         )
                     }
                     entry<Dashboard> {
-                        DashboardScreen()
+                        DashboardScreen(
+                            onOpenSettings = openSettings,
+                            onViewStreaks = { selectTab(Streaks) },
+                            onEditPlan = openSettings,
+                        )
                     }
                     entry<Stats> {
                         StatsScreen()

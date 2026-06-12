@@ -1,6 +1,7 @@
 package com.example.brainrottracker.ui.screens.limits
 
 import android.content.Context
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,7 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brainrottracker.R
 import com.example.brainrottracker.data.local.prefs.AppPreferences
 import com.example.brainrottracker.data.sync.UsageSyncManager
 import com.example.brainrottracker.service.BlockingMode
@@ -150,11 +153,12 @@ fun LimitsScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text("🎯", fontSize = 18.sp)
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     "Daily Video Limit",
                                     fontWeight = FontWeight.Medium,
@@ -169,6 +173,11 @@ fun LimitsScreen(
                                     lineHeight = 20.sp
                                 )
                             }
+                            Image(
+                                painterResource(R.drawable.char_excited),
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp)
+                            )
                         }
 
                         // Video limit slider
@@ -301,16 +310,28 @@ fun LimitsScreen(
                                 trackBg = trackBg,
                                 textSecondary = textSecondary
                             )
-                            Text(
-                                when (blockingMode) {
-                                    BlockingMode.HARD -> "Blocks the app until midnight — the only way out is closing it"
-                                    BlockingMode.SNOOZE -> "Dismissing gives you 5 more minutes, then the block returns"
-                                    BlockingMode.REMIND -> "Reminds you once each time you open the app"
-                                },
-                                color = textSecondary,
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    when (blockingMode) {
+                                        BlockingMode.HARD -> "Blocks the app until midnight — the only way out is closing it"
+                                        BlockingMode.SNOOZE -> "Dismissing gives you 5 more minutes, then the block returns"
+                                        BlockingMode.REMIND -> "Reminds you once each time you open the app"
+                                    },
+                                    color = textSecondary,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Image(
+                                    painterResource(R.drawable.char_stop),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(60.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -330,11 +351,12 @@ fun LimitsScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text("🎨", fontSize = 18.sp)
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     "Appearance",
                                     fontWeight = FontWeight.Medium,
@@ -349,6 +371,11 @@ fun LimitsScreen(
                                     lineHeight = 20.sp
                                 )
                             }
+                            Image(
+                                painterResource(R.drawable.char_thinking),
+                                contentDescription = null,
+                                modifier = Modifier.size(56.dp)
+                            )
                         }
                         ThemeModeSelector(
                             selected = ThemeController.mode,
@@ -375,11 +402,12 @@ fun LimitsScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text("👤", fontSize = 18.sp)
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     "Account",
                                     fontWeight = FontWeight.Medium,
@@ -395,6 +423,11 @@ fun LimitsScreen(
                                     lineHeight = 20.sp
                                 )
                             }
+                            Image(
+                                painterResource(R.drawable.char_thankyou),
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp)
+                            )
                         }
                         val user = signedInUser
                         if (user == null) {
