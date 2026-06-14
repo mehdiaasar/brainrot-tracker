@@ -6,6 +6,9 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Process
 import com.example.brainrottracker.data.model.Platform
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Calendar
 
 object ScreenTimeHelper {
@@ -48,6 +51,65 @@ object ScreenTimeHelper {
     fun getWeekMinutesByPlatform(context: Context): Map<Platform, Int> {
         val startMs = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
         return queryMinutesFromEvents(context, startMs, System.currentTimeMillis())
+    }
+
+    /**
+     * Per-day, per-platform foreground minutes for the last [days] days (including today),
+     * keyed by ISO date (`LocalDate.toString()`). Every date in the window is present, even
+     * if it has no usage. Each finished session is attributed to the local date of its start.
+     *
+     * Used by the Stats screen for the weekly screen-time breakdown chart and the
+     * vs-last-week comparisons (call with 14 to cover this week + the previous week).
+     */
+    fun getDailyMinutesByPlatform(context: Context, days: Int): Map<String, Map<Platform, Int>> {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val allDates = (0 until days).map { today.minusDays(it.toLong()).toString() }
+        // Pre-seed every date with zeroes so callers can rely on a complete window.
+        val empty: Map<String, MutableMap<Platform, Long>> =
+            allDates.associateWith { Platform.entries.associateWith { 0L }.toMutableMap() }
+
+        if (!hasPermission(context)) {
+            return empty.mapValues { (_, m) -> m.mapValues { it.value.toInt() } }
+        }
+
+        val startMs = today.minusDays((days - 1).toLong())
+            .atStartOfDay(zone).toInstant().toEpochMilli()
+        val endMs = System.currentTimeMillis()
+        val packageToPlatform = Platform.entries.associateBy { it.packageName }
+
+        return try {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val events = usm.queryEvents(startMs, endMs)
+            val event = UsageEvents.Event()
+            val foregroundStart = mutableMapOf<String, Long>()
+
+            fun attribute(pkg: String, start: Long, end: Long) {
+                val platform = packageToPlatform[pkg] ?: return
+                val dateKey = Instant.ofEpochMilli(start).atZone(zone).toLocalDate().toString()
+                val bucket = empty[dateKey] ?: return   // session started before the window
+                bucket[platform] = (bucket[platform] ?: 0L) + (end - start)
+            }
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName
+                if (pkg !in packageToPlatform) continue
+                when (event.eventType) {
+                    UsageEvents.Event.ACTIVITY_RESUMED ->
+                        if (pkg !in foregroundStart) foregroundStart[pkg] = event.timeStamp
+                    UsageEvents.Event.ACTIVITY_PAUSED,
+                    UsageEvents.Event.ACTIVITY_STOPPED ->
+                        foregroundStart.remove(pkg)?.let { attribute(pkg, it, event.timeStamp) }
+                }
+            }
+            // Any app still foregrounded at the end of the window.
+            for ((pkg, start) in foregroundStart) attribute(pkg, start, endMs)
+
+            empty.mapValues { (_, m) -> m.mapValues { (it.value / 60_000L).toInt() } }
+        } catch (_: Exception) {
+            empty.mapValues { (_, m) -> m.mapValues { it.value.toInt() } }
+        }
     }
 
     /**

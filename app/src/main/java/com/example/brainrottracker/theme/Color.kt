@@ -83,3 +83,41 @@ val StatsChartYouTube = Color(0xFFC64545)
 val StatsChartInstagram = Color(0xFFE8A55A)
 val StatsChartSnapchat = Color(0xFF5DB8A6)
 val WarmError = Color(0xFFC64545)
+
+// ── Stats & Reports — productivity-score tiers ──────────────────────────────
+// Tier accents (score number, gauge arc, headline), tuned to the mock screens.
+val StatsExcellent = Color(0xFF2EA84F)   // green
+val StatsGood = Color(0xFFEFA42A)        // gold
+val StatsFair = Color(0xFFF0792B)        // orange
+val StatsLow = Color(0xFFF24E27)         // red-orange
+val StatsCritical = Color(0xFFE5342B)    // red
+
+// Hero-card backgrounds per tier — light mode (soft tint), dark mode (subtle wash).
+val StatsBgExcellentLight = Color(0xFFEFF4EE)
+val StatsBgGoodLight = Color(0xFFFBF1DC)
+val StatsBgFairLight = Color(0xFFFCEBDF)
+val StatsBgLowLight = Color(0xFFFBE9E2)
+val StatsBgCriticalLight = Color(0xFFFCE4E3)
+val StatsBgExcellentDark = Color(0xFF20251E)
+val StatsBgGoodDark = Color(0xFF2A2520)
+val StatsBgFairDark = Color(0xFF2C231D)
+val StatsBgLowDark = Color(0xFF2C201C)
+val StatsBgCriticalDark = Color(0xFF2C1D1D)
+
+// Footer-card accent + background per tier (the LOW tier reads as a calm lavender).
+val StatsFooterLowAccent = Color(0xFF8B5CF6)
+val StatsBgLowFooterLight = Color(0xFFEEEAFB)
+val StatsBgLowFooterDark = Color(0xFF26223A)
+
+// Best/Worst day card tints.
+val StatsBestBgLight = Color(0xFFEDF4EC)
+val StatsBestBgDark = Color(0xFF20251E)
+val StatsWorstBgLight = Color(0xFFFBEAEA)
+val StatsWorstBgDark = Color(0xFF2C1D1D)
+
+// Weekly bar-chart segment colors (mock palette). TikTok adapts so it stays visible on dark.
+val ChartYouTube = Color(0xFFE0392F)
+val ChartInstagram = Color(0xFFF2982A)
+val ChartSnapchat = Color(0xFF2FA84F)
+val ChartTikTokLight = Color(0xFF17150F)
+val ChartTikTokDark = Color(0xFFC9C5BD)

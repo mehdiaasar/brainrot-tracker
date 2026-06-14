@@ -50,6 +50,13 @@ class UsageRepository(private val database: AppDatabase) {
         return dailyLogDao.getDateRange(start.toString(), end.toString())
     }
 
+    /** The seven days *before* the current week (days −13..−7), for week-over-week deltas. */
+    fun getPreviousWeekLogs(): Flow<List<DailyLog>> {
+        val end = LocalDate.now().minusDays(7)
+        val start = end.minusDays(6)
+        return dailyLogDao.getDateRange(start.toString(), end.toString())
+    }
+
     fun getMonthlyLogs(): Flow<List<DailyLog>> {
         val end = LocalDate.now()
         val start = end.minusDays(29)

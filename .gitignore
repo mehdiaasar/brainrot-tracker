@@ -24,3 +24,11 @@ keystore.properties
 
 # UI prototypes (not part of the Android build)
 ui:ux/
+
+# Raw design source assets (large SVGs; converted WebP/PNG live under app/.../res)
+/brain/
+/character/
+/dashboard/
+/setting/
+/stats /
+/streak & progress/
