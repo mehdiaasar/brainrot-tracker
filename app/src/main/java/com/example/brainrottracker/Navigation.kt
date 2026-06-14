@@ -2,10 +2,14 @@ package com.example.brainrottracker
 
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -124,6 +128,14 @@ fun MainNavigation() {
     }
     // Settings is the relocated "Goals"/Limits screen, opened from the dashboard profile photo.
     val openSettings: () -> Unit = { if (backStack.lastOrNull() != Limits) backStack += Limits }
+    // Back from Settings always returns to the Streaks & Progress tab, collapsing the
+    // pushed Limits screen even when Streaks was already the active tab.
+    val backFromSettings: () -> Unit = {
+        currentDestination = Streaks
+        while (backStack.size > 1) backStack.removeLastOrNull()
+        backStack.removeLastOrNull()
+        backStack += Streaks
+    }
 
     // Hide the bar on full-screen flows (onboarding, sign-in)
     val topKey = backStack.lastOrNull()
@@ -213,8 +225,22 @@ fun MainNavigation() {
                     entry<Stats> {
                         StatsScreen()
                     }
-                    entry<Limits> {
-                        LimitsScreen(onNavigateToSignIn = { backStack += GoogleSignIn })
+                    // Settings slides in from the right when opened and slides back off to
+                    // the right when returning to Streaks & Progress. Scoped to this entry so
+                    // bottom-nav tab switches keep their default cross-fade.
+                    entry<Limits>(
+                        metadata = NavDisplay.transitionSpec {
+                            (slideInHorizontally(tween(320)) { it } + fadeIn(tween(320))) togetherWith
+                                (slideOutHorizontally(tween(320)) { -it / 5 } + fadeOut(tween(320)))
+                        } + NavDisplay.popTransitionSpec {
+                            (slideInHorizontally(tween(320)) { -it / 5 } + fadeIn(tween(320))) togetherWith
+                                (slideOutHorizontally(tween(320)) { it } + fadeOut(tween(320)))
+                        }
+                    ) {
+                        LimitsScreen(
+                            onNavigateToSignIn = { backStack += GoogleSignIn },
+                            onBack = backFromSettings
+                        )
                     }
                     entry<Streaks> {
                         StreaksScreen(onOpenSettings = openSettings)

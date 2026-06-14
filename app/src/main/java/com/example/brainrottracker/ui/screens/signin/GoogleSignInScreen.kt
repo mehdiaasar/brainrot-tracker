@@ -1,5 +1,6 @@
 package com.example.brainrottracker.ui.screens.signin
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -30,10 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -116,51 +120,70 @@ fun GoogleSignInScreen(
             .fillMaxSize()
             .background(bg)
             .padding(horizontal = 32.dp)
-            .padding(top = 96.dp, bottom = 48.dp),
-        horizontalAlignment = Alignment.Start
+            .padding(top = 48.dp, bottom = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Logo
+        // Brain mascot
+        Image(
+            painter = painterResource(R.drawable.signin_brain),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(200.dp)
+        )
+
+        // Brand — tucked up close to the brain's legs
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "✳", fontSize = 22.sp, color = textPrimary)
+            Text(text = "✳", fontSize = 22.sp, color = WarmAccent)
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "BrainRot Tracker",
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Normal,
-                fontSize = 28.sp,
+                text = "focus",
+                fontWeight = FontWeight.Bold,
+                fontSize = 34.sp,
                 letterSpacing = (-0.3).sp,
                 color = textPrimary
             )
+            Text(
+                text = "Center",
+                fontWeight = FontWeight.Bold,
+                fontSize = 34.sp,
+                letterSpacing = (-0.3).sp,
+                color = WarmAccent
+            )
         }
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(12.dp))
 
         Text(
             text = "Sign In",
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.Normal,
-            fontSize = 36.sp,
+            fontSize = 26.sp,
             letterSpacing = (-0.5).sp,
-            color = textPrimary
+            color = textPrimary,
+            textAlign = TextAlign.Center
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
         Text(
             text = "Track your scroll habits and protect your focus.",
-            fontSize = 15.sp,
+            fontSize = 13.sp,
             color = textSecondary,
-            lineHeight = 22.sp
+            lineHeight = 18.sp,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center
         )
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(40.dp))
 
         when (state) {
             is SignInState.Loading -> {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(56.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
@@ -175,26 +198,25 @@ fun GoogleSignInScreen(
                     onClick = { viewModel.signIn(context, webClientId) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, border, RoundedCornerShape(12.dp)),
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, border, RoundedCornerShape(14.dp)),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = surface,
                         contentColor = textPrimary
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text(
-                        text = "G",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4285F4)
+                    Image(
+                        painter = painterResource(R.drawable.ic_google_logo),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(12.dp))
                     Text(
                         text = "Continue with Google",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = textPrimary
                     )
                 }
@@ -203,16 +225,26 @@ fun GoogleSignInScreen(
 
         if (state is SignInState.Error) {
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = (state as SignInState.Error).message,
-                fontSize = 13.sp,
-                color = WarmError
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(WarmError.copy(alpha = 0.10f))
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+            ) {
+                Text(
+                    text = (state as SignInState.Error).message,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = WarmError
+                )
+            }
         }
 
+        Spacer(Modifier.weight(1f))
+
         if (onSkip != null) {
-            Spacer(Modifier.height(16.dp))
-            TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
+            TextButton(onClick = onSkip) {
                 Text(
                     text = "Skip for now",
                     color = textSecondary,

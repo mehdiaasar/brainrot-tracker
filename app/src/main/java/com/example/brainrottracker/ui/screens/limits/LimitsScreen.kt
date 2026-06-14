@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
@@ -44,7 +45,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,12 +54,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brainrottracker.R
 import com.example.brainrottracker.data.local.prefs.AppPreferences
-import com.example.brainrottracker.data.sync.UsageSyncManager
 import com.example.brainrottracker.service.BlockingMode
 import com.example.brainrottracker.theme.ThemeController
 import com.example.brainrottracker.theme.WarmBackground
@@ -74,10 +74,6 @@ import com.example.brainrottracker.theme.WarmSurface
 import com.example.brainrottracker.theme.WarmText
 import com.example.brainrottracker.theme.WarmTextSecondary
 import com.example.brainrottracker.theme.rememberIsDark
-import com.google.firebase.FirebaseApp
-import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 // Screen-local accents tuned to the Daily Limits mock.
 private val SetOrange = Color(0xFFF26B21)
@@ -89,6 +85,7 @@ private val SetGreen = Color(0xFF46A86B)
 fun LimitsScreen(
     modifier: Modifier = Modifier,
     onNavigateToSignIn: () -> Unit = {},
+    onBack: () -> Unit = {},
     viewModel: LimitsViewModel = viewModel()
 ) {
     val dark = rememberIsDark()
@@ -121,10 +118,6 @@ fun LimitsScreen(
 
     val signedInUser by remember { AppPreferences.userFlow(context) }
         .collectAsState(initial = null)
-    var cloudSyncEnabled by remember {
-        mutableStateOf(sharedPrefs.getBoolean(UsageSyncManager.KEY_ENABLED, false))
-    }
-    val scope = rememberCoroutineScope()
 
     val sliderColors = SliderDefaults.colors(
         thumbColor = SetOrange,
@@ -149,16 +142,25 @@ fun LimitsScreen(
                         .padding(horizontal = 20.dp)
                         .padding(top = 32.dp, bottom = 12.dp)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(surface)
+                            .border(1.dp, cardBorder, CircleShape)
+                            .clickable { onBack() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back to Streaks & Progress",
+                            tint = textPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
                     Text(
-                        "SETTINGS",
-                        color = textSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.5.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Daily Limits",
+                        "Settings",
                         fontWeight = FontWeight.Bold,
                         color = textPrimary,
                         fontSize = 36.sp,
@@ -172,6 +174,149 @@ fun LimitsScreen(
                         fontSize = 15.sp,
                         lineHeight = 21.sp
                     )
+                }
+            }
+
+            // Account: signed-in users get a centered profile header (avatar + name + email);
+            // signed-out users keep the "Sign in with Google" card.
+            item {
+                val user = signedInUser
+                if (user != null) {
+                    val initial = user.name.ifEmpty { user.email }
+                        .firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 8.dp, bottom = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(88.dp)
+                                .clip(CircleShape)
+                                .background(SetOrange),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                initial,
+                                color = Color.White,
+                                fontSize = 38.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                user.name.ifEmpty { user.email.substringBefore("@") },
+                                color = textPrimary,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = 30.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            if (user.email.isNotEmpty()) {
+                                Text(
+                                    user.email,
+                                    color = textSecondary,
+                                    fontSize = 15.sp,
+                                    lineHeight = 20.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 12.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(surface)
+                            .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
+                    ) {
+                        // Brain is drawn first (behind) so the button paints over its feet —
+                        // it reads as sitting on the button rather than floating over it.
+                        Image(
+                            painterResource(R.drawable.setting_google),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(bottom = 63.dp, end = 14.dp)
+                                .width(90.dp)
+                                .height(63.dp)
+                        )
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 96.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Person,
+                                    contentDescription = null,
+                                    tint = SetGreen,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Account",
+                                        fontWeight = FontWeight.Bold,
+                                        color = textPrimary,
+                                        fontSize = 18.sp,
+                                        lineHeight = 22.sp
+                                    )
+                                    Text(
+                                        "Sign in to back up your stats and settings",
+                                        color = textSecondary,
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(SetOrange)
+                                    .clickable { onNavigateToSignIn() }
+                                    .padding(vertical = 13.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "G",
+                                        color = SetOrange,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    "Sign in with Google",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -497,180 +642,6 @@ fun LimitsScreen(
                             .offset(x = 10.dp, y = (-14).dp)
                             .size(132.dp)
                     )
-                }
-            }
-
-            // Account card
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 12.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(surface)
-                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
-                ) {
-                    // Signed-out brain is drawn first (behind) so the button paints over its
-                    // feet — it reads as sitting on the button rather than floating over it.
-                    if (signedInUser == null) {
-                        Image(
-                            painterResource(R.drawable.setting_google),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(bottom = 63.dp, end = 14.dp)
-                                .width(90.dp)
-                                .height(63.dp)
-                        )
-                    }
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(if (signedInUser == null) Modifier.padding(end = 96.dp) else Modifier),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                Icons.Filled.Person,
-                                contentDescription = null,
-                                tint = SetGreen,
-                                modifier = Modifier.size(26.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Account",
-                                    fontWeight = FontWeight.Bold,
-                                    color = textPrimary,
-                                    fontSize = 18.sp,
-                                    lineHeight = 22.sp
-                                )
-                                Text(
-                                    signedInUser?.let { it.email.ifEmpty { it.name } }
-                                        ?: "Sign in to back up your stats and settings",
-                                    color = textSecondary,
-                                    fontSize = 14.sp,
-                                    lineHeight = 20.sp
-                                )
-                            }
-                            if (signedInUser != null) {
-                                Image(
-                                    painterResource(R.drawable.setting_google),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(101.dp)
-                                )
-                            }
-                        }
-                        val user = signedInUser
-                        if (user == null) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(SetOrange)
-                                    .clickable { onNavigateToSignIn() }
-                                    .padding(vertical = 13.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        "G",
-                                        color = SetOrange,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "Sign in with Google",
-                                    color = Color.White,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "Cloud backup",
-                                        color = textPrimary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        "Upload daily totals to your private account",
-                                        color = textSecondary,
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp
-                                    )
-                                }
-                                WarmToggle(
-                                    checked = cloudSyncEnabled,
-                                    onCheckedChange = { enabled ->
-                                        cloudSyncEnabled = enabled
-                                        sharedPrefs.edit()
-                                            .putBoolean(UsageSyncManager.KEY_ENABLED, enabled)
-                                            .apply()
-                                        if (enabled) {
-                                            scope.launch(Dispatchers.IO) {
-                                                try {
-                                                    UsageSyncManager(
-                                                        context.applicationContext,
-                                                        viewModel.repositoryForSync()
-                                                    ).syncIfEnabled()
-                                                } catch (_: Exception) {
-                                                }
-                                            }
-                                        }
-                                    },
-                                    offColor = cardBorder
-                                )
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .border(1.dp, cardBorder, RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        scope.launch {
-                                            cloudSyncEnabled = false
-                                            sharedPrefs.edit()
-                                                .putBoolean(UsageSyncManager.KEY_ENABLED, false)
-                                                .remove(UsageSyncManager.KEY_LAST_SYNCED)
-                                                .apply()
-                                            if (FirebaseApp.getApps(context).isNotEmpty()) {
-                                                FirebaseAuth.getInstance().signOut()
-                                            }
-                                            AppPreferences.signOut(context)
-                                        }
-                                    }
-                                    .padding(vertical = 11.dp),
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    "Sign out",
-                                    color = textSecondary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
                 }
             }
 

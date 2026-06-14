@@ -26,6 +26,7 @@ keystore.properties
 ui:ux/
 
 # Raw design source assets (large SVGs; converted WebP/PNG live under app/.../res)
+/*.svg
 /brain/
 /character/
 /dashboard/
