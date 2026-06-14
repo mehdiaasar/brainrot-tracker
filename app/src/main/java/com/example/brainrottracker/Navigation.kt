@@ -217,7 +217,7 @@ fun MainNavigation() {
                         LimitsScreen(onNavigateToSignIn = { backStack += GoogleSignIn })
                     }
                     entry<Streaks> {
-                        StreaksScreen()
+                        StreaksScreen(onOpenSettings = openSettings)
                     }
                 }
             )

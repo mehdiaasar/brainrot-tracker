@@ -62,8 +62,6 @@ import androidx.compose.ui.unit.lerp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import com.example.brainrottracker.data.local.prefs.AppPreferences
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.data.util.ScreenTimeHelper
 import com.example.brainrottracker.service.ReelCounterService
@@ -126,7 +124,6 @@ fun DashboardScreen(
     val currentStreak by viewModel.currentStreak.collectAsState()
     val reelLimit by viewModel.reelLimit.collectAsState()
     val minuteLimit by viewModel.minuteLimit.collectAsState()
-    val user by remember { AppPreferences.userFlow(context) }.collectAsState(initial = null)
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var isTracking by remember { mutableStateOf(ReelCounterService.isRunning) }
@@ -215,9 +212,6 @@ fun DashboardScreen(
     Column(modifier = modifier.fillMaxSize().background(bg)) {
         DashboardTopBar(
             isTracking = isTracking,
-            photoUrl = user?.photoUrl,
-            displayName = user?.name ?: user?.email,
-            onProfileClick = onOpenSettings,
             trackBg = trackBg,
             textPrimary = textPrimary,
             textSecondary = textSecondary,
@@ -331,13 +325,10 @@ fun DashboardScreen(
     }
 }
 
-/** Static top bar: profile photo (opens Settings), brand, and tracking badge. */
+/** Static top bar: brand and tracking badge. */
 @Composable
 private fun DashboardTopBar(
     isTracking: Boolean,
-    photoUrl: String?,
-    displayName: String?,
-    onProfileClick: () -> Unit,
     trackBg: Color,
     textPrimary: Color,
     textSecondary: Color,
@@ -353,7 +344,6 @@ private fun DashboardTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ProfileAvatar(photoUrl, displayName, onProfileClick, trackBg, textSecondary)
             Text("✳", color = textPrimary, fontSize = 18.sp)
             Text(
                 "FocusCenter",
@@ -382,37 +372,6 @@ private fun DashboardTopBar(
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 1.2.sp
             )
-        }
-    }
-}
-
-/** Google profile photo (or initial fallback) that opens Settings when tapped. */
-@Composable
-private fun ProfileAvatar(
-    photoUrl: String?,
-    displayName: String?,
-    onClick: () -> Unit,
-    trackBg: Color,
-    textSecondary: Color,
-) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(trackBg)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        if (!photoUrl.isNullOrEmpty()) {
-            AsyncImage(
-                model = photoUrl,
-                contentDescription = "Open settings",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(38.dp).clip(CircleShape)
-            )
-        } else {
-            val initial = displayName?.trim()?.firstOrNull()?.uppercase() ?: "⚙"
-            Text(initial, color = textSecondary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
