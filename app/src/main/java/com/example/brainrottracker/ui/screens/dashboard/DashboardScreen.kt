@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -94,7 +96,7 @@ import androidx.compose.ui.util.lerp as lerpFloat
 /** Warm amber used for the "nearing limit" tier across the dashboard. */
 private val DashAmber = Color(0xFFE8A55A)
 
-private val HeaderMax = 530.dp
+private val HeaderMax = 388.dp
 private val HeaderMin = 224.dp
 
 @Composable
@@ -144,39 +146,31 @@ fun DashboardScreen(
     val mins = screenTimeToday % 60
     val timeLabel = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
 
-    // --- Scroll-driven collapse, then slide away --------------------------------
-    // Two phases, both fed by scroll before the list itself moves:
-    //   1. `headerPx`  shrinks HeaderMax → HeaderMin — the Brain collapses center → right.
-    //   2. `headerOffsetPx` then slides the whole (collapsed) hero up off-screen so the body
-    //      rises to fill the screen. Scrolling back down reverses both phases.
+    // --- Scroll-driven hero: the whole header scrolls up as one unit -------------
+    // A single `scrolled` accumulator (0 = expanded, maxPx = fully off-screen) drives everything:
+    //   • the hero translates up 1:1 with the finger (greeting + Brain move together, no pinning);
+    //   • the Brain shrinks over the first `shrinkPx` of that travel;
+    //   • the body's top padding shrinks in lock-step so the cards rise with the hero.
+    // Scrolling back down reverses it. It's consumed before the list so the hero leads, then the
+    // list takes over once the hero is gone.
     val density = LocalDensity.current
     val maxPx = with(density) { HeaderMax.toPx() }
-    val minPx = with(density) { HeaderMin.toPx() }
-    var headerPx by remember { mutableFloatStateOf(maxPx) }
-    var headerOffsetPx by remember { mutableFloatStateOf(0f) }   // -minPx..0 (slide up)
-    val fraction = ((maxPx - headerPx) / (maxPx - minPx)).coerceIn(0f, 1f)
-    val headerHeight = with(density) { headerPx.toDp() }
-    // Body starts at the header's visible bottom edge; shrinks to 0 once it has slid away.
-    val bodyTopPad = with(density) { (headerPx + headerOffsetPx).coerceAtLeast(0f).toDp() }
+    val shrinkPx = with(density) { (HeaderMax - HeaderMin).toPx() }
+    var scrolled by remember { mutableFloatStateOf(0f) }   // 0..maxPx
+    val fraction = (scrolled / shrinkPx).coerceIn(0f, 1f)
+    val headerHeight = HeaderMax
+    val headerOffsetPx = -scrolled
+    val bodyTopPad = with(density) { (maxPx - scrolled).coerceAtLeast(0f).toDp() }
 
-    val collapseConnection = remember(maxPx, minPx) {
+    val collapseConnection = remember(maxPx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                var remaining = available.y
-                if (remaining < 0f) {
-                    // 1. Collapse the header.
-                    if (headerPx > minPx) {
-                        val newPx = (headerPx + remaining).coerceAtLeast(minPx)
-                        remaining -= (newPx - headerPx)
-                        headerPx = newPx
-                    }
-                    // 2. Then slide it up off-screen.
-                    if (remaining < 0f && headerOffsetPx > -minPx) {
-                        val newOff = (headerOffsetPx + remaining).coerceAtLeast(-minPx)
-                        remaining -= (newOff - headerOffsetPx)
-                        headerOffsetPx = newOff
-                    }
-                    return Offset(0f, available.y - remaining)
+                val dy = available.y
+                if (dy < 0f && scrolled < maxPx) {
+                    val newScrolled = (scrolled - dy).coerceAtMost(maxPx)
+                    val used = newScrolled - scrolled
+                    scrolled = newScrolled
+                    return Offset(0f, -used)
                 }
                 return Offset.Zero
             }
@@ -186,21 +180,12 @@ fun DashboardScreen(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
-                var remaining = available.y
-                if (remaining > 0f) {
-                    // 1. Slide the header back down into view.
-                    if (headerOffsetPx < 0f) {
-                        val newOff = (headerOffsetPx + remaining).coerceAtMost(0f)
-                        remaining -= (newOff - headerOffsetPx)
-                        headerOffsetPx = newOff
-                    }
-                    // 2. Then expand it.
-                    if (remaining > 0f && headerPx < maxPx) {
-                        val newPx = (headerPx + remaining).coerceAtMost(maxPx)
-                        remaining -= (newPx - headerPx)
-                        headerPx = newPx
-                    }
-                    return Offset(0f, available.y - remaining)
+                val dy = available.y
+                if (dy > 0f && scrolled > 0f) {
+                    val newScrolled = (scrolled - dy).coerceAtLeast(0f)
+                    val used = scrolled - newScrolled
+                    scrolled = newScrolled
+                    return Offset(0f, used)
                 }
                 return Offset.Zero
             }
@@ -397,13 +382,13 @@ private fun HeroHeader(
         val contentW = maxWidth - side * 2
 
         // Greeting + headline + speech bubble share one column, so the bubble is always laid
-        // out directly below the headline and can never overlap it. The column narrows as we
-        // collapse to make room for the Brain on the right.
+        // out directly below the headline. The whole hero scrolls up as one unit, so the column
+        // keeps its full width — nothing needs to make room for the Brain.
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = side, top = 4.dp, end = side)
-                .width(lerp(contentW, contentW * 0.45f, fraction))
+                .width(contentW)
         ) {
             Text(
                 "Good morning! ${mood.greetingEmoji}",
@@ -423,15 +408,13 @@ private fun HeroHeader(
             SpeechBubble(text = mood.bubble, surface = surface, textPrimary = textPrimary, dark = dark)
         }
 
-        // Brain: full-bleed layer that slides centre-low → right and shrinks (1.5× sizes).
+        // Brain: stays centred at its resting spot and simply shrinks as the hero scrolls up,
+        // so the motion reads as a normal scroll with a shrinking brain (no sideways drift).
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = side),
-            contentAlignment = BiasAlignment(
-                horizontalBias = lerpFloat(0f, 1f, fraction),
-                verticalBias = lerpFloat(0.34f, 0f, fraction)
-            )
+            contentAlignment = BiasAlignment(horizontalBias = 0f, verticalBias = 0.30f)
         ) {
             MoodCharacter(
                 drawableRes = mood.mainRes,
@@ -572,17 +555,18 @@ private fun ReelsCard(
             .clip(RoundedCornerShape(12.dp))
             .background(surface)
             .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
-            .padding(14.dp)
+            .padding(12.dp)
     ) {
-        Text("Reels Scrolled Today", color = textSecondary, fontSize = 12.sp, lineHeight = 15.sp)
+        Text("Reels Scrolled Today", color = textSecondary, fontSize = 12.sp, lineHeight = 15.sp, maxLines = 2)
         Spacer(Modifier.height(6.dp))
         Text(
             "$totalReels",
             fontWeight = FontWeight.Bold,
             color = textPrimary,
-            fontSize = 36.sp,
-            lineHeight = 38.sp,
-            letterSpacing = (-1).sp
+            fontSize = 34.sp,
+            lineHeight = 36.sp,
+            letterSpacing = (-1).sp,
+            maxLines = 1
         )
         Text("/ $reelLimit videos", color = textSecondary, fontSize = 11.sp)
         Spacer(Modifier.height(8.dp))
@@ -640,12 +624,20 @@ private fun ScoreRing(
             .clip(RoundedCornerShape(12.dp))
             .background(surface)
             .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
-            .padding(14.dp),
+            .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Box(modifier = Modifier.size(104.dp), contentAlignment = Alignment.Center) {
+        // The ring fills the column width (square), capped at 104dp, so it shrinks to fit when
+        // the card becomes a narrow third column instead of overflowing and looking squished.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .sizeIn(maxWidth = 104.dp, maxHeight = 104.dp)
+                .aspectRatio(1f),
+            contentAlignment = Alignment.Center
+        ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = 9.dp.toPx()
+                val stroke = (size.minDimension * 0.085f).coerceIn(6.dp.toPx(), 9.dp.toPx())
                 val inset = stroke / 2f + 2.dp.toPx()
                 val topLeft = Offset(inset, inset)
                 val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
@@ -663,8 +655,22 @@ private fun ScoreRing(
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("$score", fontWeight = FontWeight.Bold, color = ringColor, fontSize = 30.sp, lineHeight = 32.sp)
-                Text(label, fontWeight = FontWeight.Medium, color = textSecondary, fontSize = 9.sp, letterSpacing = 1.sp)
+                Text(
+                    "$score",
+                    fontWeight = FontWeight.Bold,
+                    color = ringColor,
+                    fontSize = 28.sp,
+                    lineHeight = 30.sp,
+                    maxLines = 1
+                )
+                Text(
+                    label,
+                    fontWeight = FontWeight.Medium,
+                    color = textSecondary,
+                    fontSize = 9.sp,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1
+                )
             }
         }
     }
