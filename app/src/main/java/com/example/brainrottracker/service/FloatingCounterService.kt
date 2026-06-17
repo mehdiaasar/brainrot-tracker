@@ -52,6 +52,11 @@ import com.example.brainrottracker.ui.screens.dashboard.DashboardMood
 class FloatingCounterService : Service() {
 
     private var windowManager: WindowManager? = null
+    // The WindowManager used to add overlays. When the accessibility service is alive we add
+    // through ITS context so we can use TYPE_ACCESSIBILITY_OVERLAY, which sits in a strictly
+    // higher window layer than any other app's TYPE_APPLICATION_OVERLAY (e.g. Brain Pal).
+    private var overlayWindowManager: WindowManager? = null
+    private var useAccessibilityOverlay = false
     private var rootView: FrameLayout? = null
     private var pill: LinearLayout? = null
     private var brainView: ImageView? = null
@@ -80,12 +85,13 @@ class FloatingCounterService : Service() {
     private var popupView: View? = null
     private var isPopupAdded = false
 
-    // Blocking overlay state. REMIND-mode dismissals last for one foreground session of the
-    // blocked app (cleared by onTrackedAppLeft); SNOOZE expiry lives in prefs so it survives
-    // service restarts; HARD is never suppressed.
+    // Blocking overlay state. Blocking is total-based (combined reels across all apps vs one global
+    // limit), so suppression is global too: a REMIND-mode dismissal lasts until the user leaves ALL
+    // reel apps (cleared by onAllTrackedAppsLeft), and SNOOZE expiry lives in one global pref so it
+    // covers every app and survives service restarts; HARD is never suppressed.
     private var blockingView: View? = null
     private var isBlockingAdded = false
-    private val sessionDismissed = mutableSetOf<String>()
+    private var remindDismissedThisSession = false
 
     /** One row of the tap-to-open breakdown. */
     data class HudPlatform(val platform: Platform, val count: Int, val limit: Int)
@@ -93,6 +99,8 @@ class FloatingCounterService : Service() {
     companion object {
         private const val TAG = "FloatingCounter"
         const val PREFS = "brainrot_prefs"
+        /** Global snooze expiry (epoch millis) — one key for all apps, since blocking is total-based. */
+        const val SNOOZE_KEY = "snooze_until_all"
         const val KEY_SCALE = "hud_scale"
         const val KEY_THEME = "theme_mode"
         const val DEFAULT_SCALE = 1.2f
@@ -108,6 +116,11 @@ class FloatingCounterService : Service() {
         instance = this
         prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        // Prefer the accessibility service's WindowManager so we can draw a TYPE_ACCESSIBILITY_OVERLAY
+        // (top-most layer). It's started right after the service connects, so the instance is set here.
+        val acc = ReelCounterService.instance
+        overlayWindowManager = (acc?.getSystemService(WINDOW_SERVICE) as? WindowManager) ?: windowManager
+        useAccessibilityOverlay = acc != null
         resolveAppearance()
         createFloatingView()
         Log.d(TAG, "FloatingCounterService created")
@@ -140,6 +153,16 @@ class FloatingCounterService : Service() {
 
     private fun dp(value: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics).toInt()
+
+    /** WindowManager to add/update/remove overlays with — the accessibility one when available. */
+    private fun overlayWm(): WindowManager = overlayWindowManager ?: windowManager!!
+
+    /** Window type for our overlays: accessibility layer (top-most) when we can, else app overlay. */
+    private fun overlayType(): Int = when {
+        useAccessibilityOverlay -> WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        else -> @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+    }
 
     // ── Appearance (theme + size) ─────────────────────────────────────────────
 
@@ -196,19 +219,17 @@ class FloatingCounterService : Service() {
         rootView?.addView(pill)
         applyPillAppearance()
 
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-
         layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            type,
+            overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                // Let the pill be dragged into the status-bar area and right up to every screen
+                // edge; without these the system clamps the window to the safe area, which (with
+                // the asymmetric bleed padding) blocked movement towards the top and left.
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -284,7 +305,8 @@ class FloatingCounterService : Service() {
                     MotionEvent.ACTION_MOVE -> {
                         layoutParams?.x = initialX + (event.rawX - touchX).toInt()
                         layoutParams?.y = initialY + (event.rawY - touchY).toInt()
-                        if (isViewAdded) windowManager?.updateViewLayout(rootView, layoutParams)
+                        clampToScreen()
+                        if (isViewAdded) overlayWm().updateViewLayout(rootView, layoutParams)
                         return true
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -301,6 +323,31 @@ class FloatingCounterService : Service() {
     }
 
     /**
+     * Keep the visible pill within the screen while still letting it touch every edge. The window
+     * is wider/taller than the pill (it carries [BLEED_DP] padding on the left/top/bottom so the
+     * oversized Brain can bleed out), so the clamp accounts for that padding rather than the raw
+     * window size. Uses CENTER_HORIZONTAL/TOP gravity, matching [layoutParams].
+     */
+    private fun clampToScreen() {
+        val lp = layoutParams ?: return
+        val rv = rootView ?: return
+        val ww = rv.width
+        val wh = rv.height
+        if (ww == 0 || wh == 0) return
+        val w = resources.displayMetrics.widthPixels
+        val h = resources.displayMetrics.heightPixels
+        val bleed = dp(BLEED_DP * scale)
+        // x is an offset from the horizontal centre; right padding is 0, left padding is bleed.
+        val xMin = -((w - ww) / 2) - bleed
+        val xMax = (w - ww) / 2
+        // y is an offset from the top; top and bottom padding are both bleed.
+        val yMin = -bleed
+        val yMax = h - wh + bleed
+        if (xMin <= xMax) lp.x = lp.x.coerceIn(xMin, xMax)
+        if (yMin <= yMax) lp.y = lp.y.coerceIn(yMin, yMax)
+    }
+
+    /**
      * Show the floating pill — safe to call from any thread. Re-applies theme/size and plays a
      * pop-in animation only on the hidden→visible transition, so the 1-second heartbeat that calls
      * this repeatedly doesn't re-animate or flicker the pill.
@@ -312,7 +359,18 @@ class FloatingCounterService : Service() {
                 resolveAppearance()
                 applyPillAppearance()
                 if (!isViewAdded && rootView != null && layoutParams != null) {
-                    windowManager?.addView(rootView, layoutParams)
+                    layoutParams!!.type = overlayType()
+                    try {
+                        overlayWm().addView(rootView, layoutParams)
+                    } catch (e: Exception) {
+                        // Some OEMs reject accessibility overlays from this path — fall back to a
+                        // normal app overlay so the counter still shows (just not guaranteed top-most).
+                        Log.w(TAG, "accessibility overlay failed, falling back to app overlay: ${e.message}")
+                        useAccessibilityOverlay = false
+                        overlayWindowManager = windowManager
+                        layoutParams!!.type = overlayType()
+                        windowManager?.addView(rootView, layoutParams)
+                    }
                     isViewAdded = true
                 }
                 rootView?.visibility = View.VISIBLE
@@ -404,16 +462,10 @@ class FloatingCounterService : Service() {
     private fun showPopup() {
         if (isPopupAdded) return
         resolveAppearance()
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            type,
+            overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         )
@@ -426,7 +478,7 @@ class FloatingCounterService : Service() {
 
         popupView = scrim
         try {
-            windowManager?.addView(scrim, params)
+            overlayWm().addView(scrim, params)
             isPopupAdded = true
         } catch (e: Exception) {
             Log.e(TAG, "showPopup failed: ${e.message}", e)
@@ -608,7 +660,7 @@ class FloatingCounterService : Service() {
     private fun removePopup() {
         if (isPopupAdded && popupView != null) {
             try {
-                windowManager?.removeView(popupView)
+                overlayWm().removeView(popupView)
             } catch (_: Exception) {}
         }
         isPopupAdded = false
@@ -617,9 +669,10 @@ class FloatingCounterService : Service() {
 
     // ── Blocking overlay ──────────────────────────────────────────────────────
 
-    /** Called by [ReelCounterService] when a tracked app leaves the foreground. */
-    fun onTrackedAppLeft(pkg: String) {
-        Platform.fromPackageName(pkg)?.let { sessionDismissed.remove(it.name) }
+    /** Called by [ReelCounterService] when the user leaves ALL tracked apps (the scroll session
+     * ended). Re-arms the REMIND reminder so the next doomscroll session prompts again. */
+    fun onAllTrackedAppsLeft() {
+        remindDismissedThisSession = false
     }
 
     fun showBlockingOverlay(platform: Platform, limit: Int, mode: BlockingMode) {
@@ -627,26 +680,20 @@ class FloatingCounterService : Service() {
             when (mode) {
                 BlockingMode.HARD -> Unit // never suppressed
                 BlockingMode.SNOOZE -> {
-                    val snoozeUntil = prefs.getLong("snooze_until_${platform.name}", 0L)
+                    val snoozeUntil = prefs.getLong(SNOOZE_KEY, 0L)
                     if (System.currentTimeMillis() < snoozeUntil) return@post
                 }
                 BlockingMode.REMIND -> {
-                    if (sessionDismissed.contains(platform.name)) return@post
+                    if (remindDismissedThisSession) return@post
                 }
             }
             if (isBlockingAdded) return@post
 
             resolveAppearance()
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            }
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                type,
+                overlayType(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
             )
@@ -658,7 +705,7 @@ class FloatingCounterService : Service() {
 
             blockingView = scrim
             try {
-                windowManager?.addView(scrim, params)
+                overlayWm().addView(scrim, params)
                 isBlockingAdded = true
             } catch (e: Exception) {
                 Log.e(TAG, "showBlockingOverlay failed: ${e.message}", e)
@@ -703,9 +750,9 @@ class FloatingCounterService : Service() {
         })
 
         val subtitle = when (mode) {
-            BlockingMode.HARD -> "You've watched $limit ${platform.displayName} videos today.\nBlocked until midnight. 🧘"
-            BlockingMode.SNOOZE -> "You've watched $limit ${platform.displayName} videos today.\nTime to take a break! 🧘"
-            BlockingMode.REMIND -> "You've watched $limit ${platform.displayName} videos today.\nTime to take a break! 🧘"
+            BlockingMode.HARD -> "You've hit your daily limit of $limit videos.\nBlocked until midnight. 🧘"
+            BlockingMode.SNOOZE -> "You've hit your daily limit of $limit videos.\nTime to take a break! 🧘"
+            BlockingMode.REMIND -> "You've hit your daily limit of $limit videos.\nTime to take a break! 🧘"
         }
         card.addView(TextView(this).apply {
             text = subtitle
@@ -755,10 +802,7 @@ class FloatingCounterService : Service() {
                     .apply { leftMargin = dp(8f) }
                 setOnClickListener {
                     prefs.edit()
-                        .putLong(
-                            "snooze_until_${platform.name}",
-                            System.currentTimeMillis() + BlockingMode.SNOOZE_MS
-                        )
+                        .putLong(SNOOZE_KEY, System.currentTimeMillis() + BlockingMode.SNOOZE_MS)
                         .apply()
                     removeBlockingOverlay()
                 }
@@ -772,7 +816,7 @@ class FloatingCounterService : Service() {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                     .apply { leftMargin = dp(8f) }
                 setOnClickListener {
-                    sessionDismissed.add(platform.name)
+                    remindDismissedThisSession = true
                     removeBlockingOverlay()
                 }
             })
@@ -785,7 +829,7 @@ class FloatingCounterService : Service() {
     private fun removeBlockingOverlay() {
         if (isBlockingAdded && blockingView != null) {
             try {
-                windowManager?.removeView(blockingView)
+                overlayWm().removeView(blockingView)
             } catch (_: Exception) {}
         }
         isBlockingAdded = false
@@ -801,7 +845,7 @@ class FloatingCounterService : Service() {
         removeBlockingOverlay()
         if (isViewAdded && rootView != null) {
             try {
-                windowManager?.removeView(rootView)
+                overlayWm().removeView(rootView)
             } catch (_: Exception) {}
             isViewAdded = false
         }
