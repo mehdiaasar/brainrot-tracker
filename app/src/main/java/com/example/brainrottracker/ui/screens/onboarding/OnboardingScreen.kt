@@ -370,7 +370,10 @@ private fun PermissionCard(
                 fontWeight = FontWeight.Medium,
                 fontSize = 16.sp,
                 lineHeight = 22.sp,
-                color = textPrimary
+                color = textPrimary,
+                // Take the remaining width so the badge keeps its full size and never gets
+                // squeezed into a two-line "GRANTE D" on narrower screens.
+                modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp)
             )
             StatusBadge(isGranted = isGranted, cardBorder = cardBorder, textSecondary = textSecondary)
         }
@@ -412,14 +415,16 @@ private fun StatusBadge(isGranted: Boolean, cardBorder: Color, textSecondary: Co
             modifier = Modifier
                 .clip(RoundedCornerShape(50.dp))
                 .background(WarmGrantedGreen)
-                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .padding(horizontal = 12.dp, vertical = 5.dp)
         ) {
             Text(
                 text = "GRANTED",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 1.5.sp,
-                color = Color.White
+                letterSpacing = 1.sp,
+                color = Color.White,
+                maxLines = 1,
+                softWrap = false
             )
         }
     } else {
@@ -427,14 +432,16 @@ private fun StatusBadge(isGranted: Boolean, cardBorder: Color, textSecondary: Co
             modifier = Modifier
                 .clip(RoundedCornerShape(50.dp))
                 .border(1.dp, cardBorder, RoundedCornerShape(50.dp))
-                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .padding(horizontal = 12.dp, vertical = 5.dp)
         ) {
             Text(
                 text = "PENDING",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 1.5.sp,
-                color = textSecondary
+                letterSpacing = 1.sp,
+                color = textSecondary,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }
