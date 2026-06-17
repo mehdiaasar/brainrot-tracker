@@ -33,7 +33,6 @@ import com.example.brainrottracker.MainActivity
 import com.example.brainrottracker.data.local.db.AppDatabase
 import com.example.brainrottracker.data.local.db.entity.DailyLog
 import com.example.brainrottracker.data.repository.UsageRepository
-import com.example.brainrottracker.data.util.ScreenTimeHelper
 import com.example.brainrottracker.ui.screens.dashboard.DashboardMood
 import java.time.LocalDate
 
@@ -44,17 +43,13 @@ class BrainRotWidget : GlanceAppWidget() {
         val todayLog = db.dailyLogDao().getByDateOnce(LocalDate.now().toString())
         val limits = db.userLimitsDao().getAllOnce()
         val reelLimit = limits.firstOrNull()?.dailyReelLimit ?: 50
-        val minuteLimit = limits.firstOrNull()?.dailyMinuteLimit ?: 60
         val totalReels = todayLog?.getTotalReels() ?: 0
-        // Live screen-time + health, the same way the dashboard computes them — the stored
+        // Mood + health are reels-only, the same way the dashboard computes them — the stored
         // brainHealthScore is never refreshed, which is why the widget always showed 100%.
-        val minuteMap = ScreenTimeHelper.getTodayMinutesByPlatform(context)
-        val minutes = minuteMap.values.sum()
         val reelRatio = if (reelLimit > 0) totalReels.toFloat() / reelLimit else 0f
-        val minuteRatio = if (minuteLimit > 0) minutes.toFloat() / minuteLimit else 0f
-        val mood = DashboardMood.fromUsage(reelRatio, minuteRatio)
+        val mood = DashboardMood.fromUsage(reelRatio)
         val health = if (todayLog != null) {
-            UsageRepository(db).calculateBrainHealth(todayLog, limits, minuteMap)
+            UsageRepository(db).calculateBrainHealth(todayLog, limits)
         } else 100
         val dark = resolveIsDark(context)
 

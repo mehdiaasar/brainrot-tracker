@@ -46,17 +46,15 @@ enum class ShieldStatus(
 data class FocusShield(val status: ShieldStatus, val percent: Int) {
     companion object {
         /**
-         * @param reelRatio   today's reels / daily reel limit
-         * @param minuteRatio today's tracked minutes / daily minute limit
+         * @param reelRatio today's reels / daily reel limit
          */
-        fun fromUsage(reelRatio: Float, minuteRatio: Float): FocusShield {
-            val worst = maxOf(reelRatio, minuteRatio)
+        fun fromUsage(reelRatio: Float): FocusShield {
             // 0 usage → 100% protection; at the limit → ~40%; well over → floors out near 5%.
-            val percent = (100f - worst * 60f).coerceIn(5f, 100f).toInt()
+            val percent = (100f - reelRatio * 60f).coerceIn(5f, 100f).toInt()
             val status = when {
-                worst < 0.5f -> ShieldStatus.ACTIVE
-                worst < 0.85f -> ShieldStatus.WEAK
-                worst < 1.25f -> ShieldStatus.DAMAGED
+                reelRatio < 0.5f -> ShieldStatus.ACTIVE
+                reelRatio < 0.85f -> ShieldStatus.WEAK
+                reelRatio < 1.25f -> ShieldStatus.DAMAGED
                 else -> ShieldStatus.BROKEN
             }
             return FocusShield(status, percent)

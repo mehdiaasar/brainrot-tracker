@@ -59,10 +59,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     val brainHealth: StateFlow<Int> = combine(
         repository.getTodayLog(),
-        limits,
-        todayScreenTime
-    ) { log, currentLimits, minuteMap ->
-        if (log != null) repository.calculateBrainHealth(log, currentLimits, minuteMap)
+        limits
+    ) { log, currentLimits ->
+        if (log != null) repository.calculateBrainHealth(log, currentLimits)
         else 100
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 100)
 
@@ -79,29 +78,24 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { it.firstOrNull()?.dailyMinuteLimit ?: 60 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 60)
 
-    /** today's reels / minutes expressed as a fraction of their daily limits. */
-    private val usageRatios: Flow<Pair<Float, Float>> = combine(
-        todayLog, reelLimit, minuteLimit, screenTimeToday
-    ) { log, reels, minutes, screenMins ->
-        val reelRatio =
-            if (reels > 0) (log?.getTotalReels() ?: 0) / reels.toFloat() else 0f
-        val minuteRatio = if (minutes > 0) screenMins / minutes.toFloat() else 0f
-        reelRatio to minuteRatio
+    /** Today's reels as a fraction of the daily reel limit. Reels-only, matching the health score. */
+    private val reelRatio: Flow<Float> = combine(todayLog, reelLimit) { log, reels ->
+        if (reels > 0) (log?.getTotalReels() ?: 0) / reels.toFloat() else 0f
     }
 
-    /** Which of the five dashboard variations to show, from usage vs. limits. */
-    val mood: StateFlow<DashboardMood> = usageRatios
-        .map { (reelRatio, minuteRatio) -> DashboardMood.fromUsage(reelRatio, minuteRatio) }
+    /** Which of the five dashboard variations to show, from reel usage vs. limit. */
+    val mood: StateFlow<DashboardMood> = reelRatio
+        .map { DashboardMood.fromUsage(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardMood.GREAT)
 
-    /** Focus Shield protection level + status, from the same usage ratios as [mood]. */
-    val focusShield: StateFlow<FocusShield> = usageRatios
-        .map { (reelRatio, minuteRatio) -> FocusShield.fromUsage(reelRatio, minuteRatio) }
+    /** Focus Shield protection level + status, from the same reel ratio as [mood]. */
+    val focusShield: StateFlow<FocusShield> = reelRatio
+        .map { FocusShield.fromUsage(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FocusShield(ShieldStatus.ACTIVE, 100))
 
-    /** Daily-goal tracker: true while both reels and minutes are under their limits. */
-    val dailyGoalOnTrack: StateFlow<Boolean> = usageRatios
-        .map { (reelRatio, minuteRatio) -> reelRatio < 1f && minuteRatio < 1f }
+    /** Daily-goal tracker: true while reels are under their limit. */
+    val dailyGoalOnTrack: StateFlow<Boolean> = reelRatio
+        .map { it < 1f }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val yesterdayLog: StateFlow<DailyLog?> =

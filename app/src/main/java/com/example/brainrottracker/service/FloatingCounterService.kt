@@ -422,7 +422,7 @@ class FloatingCounterService : Service() {
             currentHealth = health.coerceIn(0, 100)
             currentBreakdown = breakdown
             val ratio = if (reelRatio >= 0f) reelRatio else (1f - currentHealth / 100f)
-            currentMood = DashboardMood.fromUsage(ratio, 0f)
+            currentMood = DashboardMood.fromUsage(ratio)
 
             countTextView?.text = "$total"
             countTextView?.setTextColor(currentMood.accent.toArgb())

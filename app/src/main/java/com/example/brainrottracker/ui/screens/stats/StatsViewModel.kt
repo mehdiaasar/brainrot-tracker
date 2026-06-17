@@ -78,11 +78,14 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
             val dailyAverageMinutes = totalMinutes / 7
             val lastWeekAvg = lastWeekMinutes / 7
 
-            val healthByDate = logs.associate { log ->
-                log.date to repository.calculateBrainHealth(log, limits)
+            // Score every calendar day in the window, not just logged ones: a day with no
+            // log means nothing was watched, which is a perfect (100) day — excluding it
+            // would let one bad logged day define the whole week.
+            val logsByDate = logs.associateBy { it.date }
+            val healthByDate = thisWeekDates.associateWith { date ->
+                logsByDate[date]?.let { repository.calculateBrainHealth(it, limits) } ?: 100
             }
-            val productivityScore = if (healthByDate.isEmpty()) 100
-            else healthByDate.values.average().roundToInt().coerceIn(0, 100)
+            val productivityScore = healthByDate.values.average().roundToInt().coerceIn(0, 100)
 
             val topApps = Platform.entries
                 .map { p -> p to logs.sumOf { it.getReelsForPlatform(p) } }

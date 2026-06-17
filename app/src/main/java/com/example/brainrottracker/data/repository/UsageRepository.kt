@@ -84,45 +84,44 @@ class UsageRepository(private val database: AppDatabase) {
     }
 
     /**
-     * Calculates a brain health score from 0–100 based on how much usage
-     * is under or over the configured limits.
+     * Calculates a brain health score from 0–100 from reel/video counts vs. limits.
      *
-     * 100 = zero usage across all platforms.
-     *   0 = usage is at or beyond 2× the limit on every platform.
+     * 100 = nothing was watched (or every platform in use was at zero usage).
+     *   0 = usage is at or beyond 2× the reel limit on every platform in use.
      *
-     * Each platform contributes equally (25 points max).
-     * For each platform the score component is:
-     *   25 × (1 − avgRatio)  where avgRatio = avg(reelRatio, minuteRatio) clamped to [0, 2] / 2
-     * If no limit is configured for a platform, default limits (30 reels, 60 min) are assumed.
+     * Reels-only by design: this is the single definition of "a good day" shared
+     * with the weekly productivity score and the streak logic. Screen-time
+     * minutes are still surfaced separately (dashboard, widget, mood face) but no
+     * longer feed the score, so the three metrics can't disagree.
+     *
+     * Only platforms with actual usage count, weighted equally among themselves —
+     * unused platforms don't hand out "free" points, so a heavy day on a single
+     * app can still drag the score to 0. Each platform's reel ratio is clamped to
+     * [0, 2] (2× over = full penalty) and its health fraction is `1 − ratio / 2`.
+     * If no limit is configured for a platform, the default reel limit (30) is assumed.
      */
     fun calculateBrainHealth(
         log: DailyLog,
-        limits: List<UserLimits>,
-        minuteOverrides: Map<Platform, Int> = emptyMap()
+        limits: List<UserLimits>
     ): Int {
         val limitMap = limits.associateBy { it.platform }
-        var totalScore = 0.0
+        var fractionSum = 0.0
+        var activePlatforms = 0
 
         for (platform in Platform.entries) {
-            val platformLimits = limitMap[platform.name]
-            val reelLimit = platformLimits?.dailyReelLimit ?: 30
-            val minuteLimit = platformLimits?.dailyMinuteLimit ?: 60
-
             val reels = log.getReelsForPlatform(platform).toDouble()
-            // Minutes come live from UsageStatsManager (ScreenTimeHelper); not stored in the DB
-            val minutes = (minuteOverrides[platform] ?: 0).toDouble()
+            // Skip platforms the user didn't touch so they don't dilute the score.
+            if (reels <= 0.0) continue
+            activePlatforms++
 
+            val reelLimit = limitMap[platform.name]?.dailyReelLimit ?: 30
             // Ratio of usage to limit, clamped to 0..2 so going 2× over = 0 points
-            val reelRatio = if (reelLimit > 0) (reels / reelLimit).coerceIn(0.0, 2.0) else if (reels > 0) 2.0 else 0.0
-            val minuteRatio = if (minuteLimit > 0) (minutes / minuteLimit).coerceIn(0.0, 2.0) else if (minutes > 0) 2.0 else 0.0
-
-            val avgRatio = (reelRatio + minuteRatio) / 2.0
-            // Each platform contributes up to 25 points
-            val platformScore = 25.0 * (1.0 - avgRatio / 2.0)
-            totalScore += platformScore
+            val reelRatio = if (reelLimit > 0) (reels / reelLimit).coerceIn(0.0, 2.0) else 2.0
+            fractionSum += (1.0 - reelRatio / 2.0)
         }
 
-        return totalScore.toInt().coerceIn(0, 100)
+        if (activePlatforms == 0) return 100
+        return (100.0 * fractionSum / activePlatforms).toInt().coerceIn(0, 100)
     }
 
     // ── Streaks ─────────────────────────────────────────────────────────

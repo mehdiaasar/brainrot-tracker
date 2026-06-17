@@ -113,16 +113,14 @@ enum class DashboardMood(
 
     companion object {
         /**
-         * @param reelRatio   today's reels / daily reel limit
-         * @param minuteRatio today's tracked minutes / daily minute limit
+         * @param reelRatio today's reels / daily reel limit
          */
-        fun fromUsage(reelRatio: Float, minuteRatio: Float): DashboardMood {
-            val worst = maxOf(reelRatio, minuteRatio)
+        fun fromUsage(reelRatio: Float): DashboardMood {
             return when {
-                worst < 0.4f -> GREAT
-                worst < 0.75f -> ZONE
-                worst < 1f -> NEAR
-                worst < 1.5f -> LIMIT
+                reelRatio < 0.4f -> GREAT
+                reelRatio < 0.75f -> ZONE
+                reelRatio < 1f -> NEAR
+                reelRatio < 1.5f -> LIMIT
                 else -> OVER
             }
         }
