@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.brainrottracker.data.local.db.AppDatabase
 import com.example.brainrottracker.data.local.db.entity.DailyLog
 import com.example.brainrottracker.data.local.db.entity.UserLimits
+import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.data.repository.UsageRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,9 +28,20 @@ class LimitsViewModel(application: Application) : AndroidViewModel(application) 
     val todayLog: StateFlow<DailyLog?> = repository.getTodayLog()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    /** Exposes the repository so the screen can trigger an immediate cloud sync. */
+    fun repositoryForSync(): UsageRepository = repository
+
     fun updateLimit(limits: UserLimits) {
         viewModelScope.launch {
             repository.updateLimits(limits)
+        }
+    }
+
+    fun updateGlobalLimits(reelLimit: Int, minuteLimit: Int) {
+        viewModelScope.launch {
+            Platform.entries.forEach { platform ->
+                repository.updateLimits(UserLimits(platform.name, reelLimit, minuteLimit))
+            }
         }
     }
 }

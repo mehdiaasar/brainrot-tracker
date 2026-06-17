@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -5,26 +7,57 @@ plugins {
   alias(libs.plugins.ksp)
 }
 
+// google-services hard-fails without google-services.json, so only apply it once the
+// Firebase project is set up (download the json from the Firebase console into app/).
+if (file("google-services.json").exists()) {
+    apply(plugin = libs.plugins.google.services.get().pluginId)
+}
+
+// Release signing credentials live in an untracked keystore.properties (see
+// keystore.properties.example). Builds without it fall back to unsigned release.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.example.brainrottracker"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.brainrottracker"
+        // TODO: confirm final id before first Play upload — it is immutable once published
+        applicationId = "io.github.aasarmehdi.brainrot"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
 
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // java.time is used throughout but minSdk is 24 (java.time needs API 26)
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
       compose = true
@@ -45,6 +78,8 @@ kotlin {
 }
 
 dependencies {
+  coreLibraryDesugaring(libs.desugar.jdk.libs)
+
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)
@@ -95,6 +130,20 @@ dependencies {
   // DataStore
   implementation(libs.androidx.datastore.preferences)
 
+  // Google Sign-In (Credential Manager)
+  implementation(libs.androidx.credentials)
+  implementation(libs.androidx.credentials.play.services)
+  implementation(libs.googleid)
+
+  // Firebase (Auth + Firestore for optional cloud backup of daily aggregates)
+  implementation(platform(libs.firebase.bom))
+  implementation(libs.firebase.auth)
+  implementation(libs.firebase.firestore)
+  implementation(libs.kotlinx.coroutines.play.services)
+
   // Material Icons Extended
   implementation(libs.androidx.compose.material.icons.extended)
+
+  // Coil (Google profile avatar)
+  implementation(libs.coil.compose)
 }

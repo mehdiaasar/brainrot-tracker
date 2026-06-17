@@ -13,7 +13,7 @@ import com.example.brainrottracker.data.local.db.entity.UserLimits
 
 @Database(
     entities = [DailyLog::class, UserLimits::class, StreakRecord::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,7 +32,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "brainrot_tracker_db"
                 )
-                    .fallbackToDestructiveMigration(false)
+                    // Pre-launch: schema changes recreate the DB instead of migrating
+                    .fallbackToDestructiveMigration(true)
                     .build()
                     .also { INSTANCE = it }
             }

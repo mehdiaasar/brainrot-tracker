@@ -1,0 +1,22 @@
+package com.example.brainrottracker.service
+
+/**
+ * How the blocking overlay behaves once a platform's daily limit is reached.
+ *
+ * HARD   — the scrim re-appears every time the app comes to the foreground until
+ *          midnight; the only way out is the "Close app" button.
+ * SNOOZE — dismissing grants a 5-minute grace period, after which the scrim returns.
+ * REMIND — the scrim shows once per foreground session; dismissing lets the user
+ *          keep scrolling until they leave and reopen the app.
+ */
+enum class BlockingMode {
+    HARD, SNOOZE, REMIND;
+
+    companion object {
+        const val PREF_KEY = "blocking_mode"
+        const val SNOOZE_MS = 5 * 60_000L
+
+        fun fromPref(value: String?): BlockingMode =
+            entries.find { it.name == value } ?: REMIND
+    }
+}

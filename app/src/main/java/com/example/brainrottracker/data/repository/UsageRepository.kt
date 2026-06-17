@@ -6,7 +6,6 @@ import com.example.brainrottracker.data.local.db.entity.StreakRecord
 import com.example.brainrottracker.data.local.db.entity.UserLimits
 import com.example.brainrottracker.data.model.Platform
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.firstOrNull
 import java.time.LocalDate
 
 class UsageRepository(private val database: AppDatabase) {
@@ -24,6 +23,8 @@ class UsageRepository(private val database: AppDatabase) {
     fun getLogForDate(date: String): Flow<DailyLog?> = dailyLogDao.getByDate(date)
 
     suspend fun getTodayLogSnapshot(): DailyLog? = dailyLogDao.getByDateOnce(today())
+
+    suspend fun getLogSnapshot(date: String): DailyLog? = dailyLogDao.getByDateOnce(date)
 
     suspend fun ensureTodayLogExists() {
         val existing = dailyLogDao.getByDateOnce(today())
@@ -43,19 +44,15 @@ class UsageRepository(private val database: AppDatabase) {
         }
     }
 
-    suspend fun addMinutes(platform: Platform, minutes: Int) {
-        ensureTodayLogExists()
-        val date = today()
-        when (platform) {
-            Platform.INSTAGRAM -> dailyLogDao.addInstagramMinutes(date, minutes)
-            Platform.YOUTUBE -> dailyLogDao.addYoutubeMinutes(date, minutes)
-            Platform.TIKTOK -> dailyLogDao.addTiktokMinutes(date, minutes)
-            Platform.SNAPCHAT -> dailyLogDao.addSnapchatMinutes(date, minutes)
-        }
-    }
-
     fun getWeeklyLogs(): Flow<List<DailyLog>> {
         val end = LocalDate.now()
+        val start = end.minusDays(6)
+        return dailyLogDao.getDateRange(start.toString(), end.toString())
+    }
+
+    /** The seven days *before* the current week (days −13..−7), for week-over-week deltas. */
+    fun getPreviousWeekLogs(): Flow<List<DailyLog>> {
+        val end = LocalDate.now().minusDays(7)
         val start = end.minusDays(6)
         return dailyLogDao.getDateRange(start.toString(), end.toString())
     }
@@ -69,6 +66,8 @@ class UsageRepository(private val database: AppDatabase) {
     // ── User Limits ─────────────────────────────────────────────────────
 
     fun getLimits(): Flow<List<UserLimits>> = userLimitsDao.getAll()
+
+    suspend fun getLimitsSnapshot(): List<UserLimits> = userLimitsDao.getAllOnce()
 
     fun getLimitForPlatform(platform: Platform): Flow<UserLimits?> =
         userLimitsDao.getForPlatform(platform.name)
@@ -85,95 +84,91 @@ class UsageRepository(private val database: AppDatabase) {
     }
 
     /**
-     * Calculates a brain health score from 0–100 based on how much usage
-     * is under or over the configured limits.
+     * Calculates a brain health score from 0–100 from reel/video counts vs. limits.
      *
-     * 100 = zero usage across all platforms.
-     *   0 = usage is at or beyond 2× the limit on every platform.
+     * 100 = nothing was watched (or every platform in use was at zero usage).
+     *   0 = usage is at or beyond 2× the reel limit on every platform in use.
      *
-     * Each platform contributes equally (25 points max).
-     * For each platform the score component is:
-     *   25 × (1 − avgRatio)  where avgRatio = avg(reelRatio, minuteRatio) clamped to [0, 2] / 2
-     * If no limit is configured for a platform, default limits (30 reels, 60 min) are assumed.
+     * Reels-only by design: this is the single definition of "a good day" shared
+     * with the weekly productivity score and the streak logic. Screen-time
+     * minutes are still surfaced separately (dashboard, widget, mood face) but no
+     * longer feed the score, so the three metrics can't disagree.
+     *
+     * Only platforms with actual usage count, weighted equally among themselves —
+     * unused platforms don't hand out "free" points, so a heavy day on a single
+     * app can still drag the score to 0. Each platform's reel ratio is clamped to
+     * [0, 2] (2× over = full penalty) and its health fraction is `1 − ratio / 2`.
+     * If no limit is configured for a platform, the default reel limit (30) is assumed.
      */
-    fun calculateBrainHealth(log: DailyLog, limits: List<UserLimits>): Int {
+    fun calculateBrainHealth(
+        log: DailyLog,
+        limits: List<UserLimits>
+    ): Int {
         val limitMap = limits.associateBy { it.platform }
-        var totalScore = 0.0
+        var fractionSum = 0.0
+        var activePlatforms = 0
 
         for (platform in Platform.entries) {
-            val platformLimits = limitMap[platform.name]
-            val reelLimit = platformLimits?.dailyReelLimit ?: 30
-            val minuteLimit = platformLimits?.dailyMinuteLimit ?: 60
-
             val reels = log.getReelsForPlatform(platform).toDouble()
-            val minutes = log.getMinutesForPlatform(platform).toDouble()
+            // Skip platforms the user didn't touch so they don't dilute the score.
+            if (reels <= 0.0) continue
+            activePlatforms++
 
+            val reelLimit = limitMap[platform.name]?.dailyReelLimit ?: 30
             // Ratio of usage to limit, clamped to 0..2 so going 2× over = 0 points
-            val reelRatio = if (reelLimit > 0) (reels / reelLimit).coerceIn(0.0, 2.0) else if (reels > 0) 2.0 else 0.0
-            val minuteRatio = if (minuteLimit > 0) (minutes / minuteLimit).coerceIn(0.0, 2.0) else if (minutes > 0) 2.0 else 0.0
-
-            val avgRatio = (reelRatio + minuteRatio) / 2.0
-            // Each platform contributes up to 25 points
-            val platformScore = 25.0 * (1.0 - avgRatio / 2.0)
-            totalScore += platformScore
+            val reelRatio = if (reelLimit > 0) (reels / reelLimit).coerceIn(0.0, 2.0) else 2.0
+            fractionSum += (1.0 - reelRatio / 2.0)
         }
 
-        return totalScore.toInt().coerceIn(0, 100)
+        if (activePlatforms == 0) return 100
+        return (100.0 * fractionSum / activePlatforms).toInt().coerceIn(0, 100)
     }
 
     // ── Streaks ─────────────────────────────────────────────────────────
 
     fun getStreakData(): Flow<List<StreakRecord>> = streakDao.getAll()
 
-    suspend fun updateStreak(date: String, underLimit: Boolean) {
-        // Fetch yesterday's record to determine streak continuation
-        val yesterday = LocalDate.parse(date).minusDays(1).toString()
-        val yesterdayRecords = dailyLogDao.getByDateOnce(yesterday)
+    suspend fun getStreakSnapshot(date: String): StreakRecord? = streakDao.getByDateOnce(date)
 
-        // Check if there's an existing streak record for yesterday
-        // We use a simple heuristic: if yesterday had a streak record, continue it
-        val existingStreaks = database.streakDao()
-        val previousStreakDay = getPreviousStreakDay(yesterday)
+    /**
+     * Evaluates streak records for every day up to and including [yesterday]
+     * that doesn't have one yet. Called lazily (service day-rollover, app open)
+     * so missed midnights are caught up on the next opportunity.
+     *
+     * A day is under-limit when no log exists (the phone wasn't doomscrolled)
+     * or every platform's reel count is within its limit. Historical days are
+     * judged against the *current* limits — limits aren't versioned.
+     */
+    suspend fun evaluateStreaksUpTo(yesterday: LocalDate) {
+        val firstUnevaluated = streakDao.getLatestDate()?.let { LocalDate.parse(it).plusDays(1) }
+            ?: dailyLogDao.getEarliestDate()?.let { LocalDate.parse(it) }
+            ?: yesterday
+        if (firstUnevaluated.isAfter(yesterday)) return
 
-        val streakDay = if (underLimit) {
-            previousStreakDay + 1
-        } else {
-            0
-        }
+        val limits = getLimitsSnapshot().associateBy { it.platform }
+        fun limitFor(platform: Platform): Int =
+            limits[platform.name]?.dailyReelLimit ?: 30
 
-        streakDao.insert(
-            StreakRecord(
-                date = date,
-                underLimit = underLimit,
-                streakDay = streakDay,
-                freezeUsed = false
-            )
-        )
-    }
-
-    private suspend fun getPreviousStreakDay(date: String): Int {
-        // We need a one-shot query; use the DAO's getByDateOnce-equivalent for streaks
-        // Since streakDao.getByDate returns Flow, we query via a workaround:
-        // Insert a helper that checks the streak_records table directly
-        return try {
-            val record = getStreakRecordOnce(date)
-            if (record != null && (record.underLimit || record.freezeUsed)) {
-                record.streakDay
+        var date = firstUnevaluated
+        var previous = streakDao.getByDateOnce(date.minusDays(1).toString())
+        while (!date.isAfter(yesterday)) {
+            val log = dailyLogDao.getByDateOnce(date.toString())
+            val underLimit = log == null ||
+                Platform.entries.all { log.getReelsForPlatform(it) <= limitFor(it) }
+            val streakDay = if (underLimit) {
+                (previous?.takeIf { it.underLimit }?.streakDay ?: 0) + 1
             } else {
                 0
             }
-        } catch (_: Exception) {
-            0
+            val record = StreakRecord(date.toString(), underLimit, streakDay)
+            streakDao.insert(record)
+            previous = record
+            date = date.plusDays(1)
         }
     }
 
-    private suspend fun getStreakRecordOnce(date: String): StreakRecord? {
-        return streakDao.getByDate(date).firstOrNull()
-    }
-
     /**
-     * Calculates the current consecutive streak ending today or yesterday.
-     * A streak day counts if underLimit is true or a freeze was used.
+     * Calculates the current consecutive streak ending with the latest record.
      */
     fun calculateCurrentStreak(records: List<StreakRecord>): Int {
         if (records.isEmpty()) return 0
@@ -182,7 +177,7 @@ class UsageRepository(private val database: AppDatabase) {
         var streak = 0
 
         for (record in sorted) {
-            if (record.underLimit || record.freezeUsed) {
+            if (record.underLimit) {
                 streak++
             } else {
                 break
@@ -203,7 +198,7 @@ class UsageRepository(private val database: AppDatabase) {
         var current = 0
 
         for (record in sorted) {
-            if (record.underLimit || record.freezeUsed) {
+            if (record.underLimit) {
                 current++
                 if (current > longest) {
                     longest = current

@@ -13,6 +13,9 @@ interface UserLimitsDao {
     @Query("SELECT * FROM user_limits")
     fun getAll(): Flow<List<UserLimits>>
 
+    @Query("SELECT * FROM user_limits")
+    suspend fun getAllOnce(): List<UserLimits>
+
     @Query("SELECT * FROM user_limits WHERE platform = :platform")
     fun getForPlatform(platform: String): Flow<UserLimits?>
 

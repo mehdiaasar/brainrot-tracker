@@ -1,9 +1,12 @@
 package com.example.brainrottracker.ui.screens.onboarding
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,12 +21,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,29 +34,37 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.example.brainrottracker.theme.DarkBackground
-import com.example.brainrottracker.theme.PrimaryBlue
-import com.example.brainrottracker.theme.PrimaryCyan
-import com.example.brainrottracker.theme.SuccessGreen
-import com.example.brainrottracker.theme.TextSecondary
-import com.example.brainrottracker.theme.TextTertiary
-import com.example.brainrottracker.theme.WarningYellow
-import com.example.brainrottracker.ui.components.GlassCard
+import com.example.brainrottracker.data.util.ScreenTimeHelper
+import com.example.brainrottracker.theme.rememberIsDark
+import com.example.brainrottracker.theme.WarmAccent
+import com.example.brainrottracker.theme.WarmBackground
+import com.example.brainrottracker.theme.WarmBorder
+import com.example.brainrottracker.theme.WarmGrantedGreen
+import com.example.brainrottracker.theme.WarmLightBackground
+import com.example.brainrottracker.theme.WarmLightBorder
+import com.example.brainrottracker.theme.WarmLightInner
+import com.example.brainrottracker.theme.WarmLightSurface
+import com.example.brainrottracker.theme.WarmLightText
+import com.example.brainrottracker.theme.WarmLightTextSecondary
+import com.example.brainrottracker.theme.WarmStepDim
+import com.example.brainrottracker.theme.WarmSurface
+import com.example.brainrottracker.theme.WarmText
+import com.example.brainrottracker.theme.WarmTextSecondary
 
 @Composable
 fun OnboardingScreen(
@@ -64,12 +74,19 @@ fun OnboardingScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Reactive states for permissions
+    val dark = rememberIsDark()
+    val bg = if (dark) WarmBackground else WarmLightBackground
+    val surface = if (dark) WarmSurface else WarmLightSurface
+    val cardBorder = if (dark) WarmBorder else WarmLightBorder
+    val stepDim = if (dark) WarmStepDim else WarmLightInner
+    val textPrimary = if (dark) WarmText else WarmLightText
+    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
+
     var hasAccessibility by remember { mutableStateOf(false) }
     var hasOverlay by remember { mutableStateOf(false) }
     var hasNotifications by remember { mutableStateOf(false) }
+    var hasUsageStats by remember { mutableStateOf(false) }
 
-    // Helper functions to query permissions
     fun checkPermissions() {
         hasAccessibility = try {
             val services = Settings.Secure.getString(
@@ -80,98 +97,161 @@ fun OnboardingScreen(
         } catch (_: Exception) { false }
 
         hasOverlay = Settings.canDrawOverlays(context)
-
         hasNotifications = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        hasUsageStats = ScreenTimeHelper.hasPermission(context)
     }
 
-    // Monitor lifecycle events to re-check permissions when returning to the app
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                checkPermissions()
-            }
+            if (event == Lifecycle.Event.ON_RESUME) checkPermissions()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Initial check
-    remember {
-        checkPermissions()
-        true
+    remember { checkPermissions(); true }
+
+    // On API 33+ notifications need an actual runtime permission grant, not just a settings page.
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { checkPermissions() }
+    var notificationRequestAttempted by rememberSaveable { mutableStateOf(false) }
+
+    // Play policy: prominent disclosure + consent BEFORE sending the user to enable
+    // the accessibility service.
+    val sharedPrefs = remember { context.getSharedPreferences("brainrot_prefs", Context.MODE_PRIVATE) }
+    var showAccessibilityDisclosure by remember { mutableStateOf(false) }
+
+    if (showAccessibilityDisclosure) {
+        AlertDialog(
+            onDismissRequest = { showAccessibilityDisclosure = false },
+            title = { Text("How Accessibility is used") },
+            text = {
+                Text(
+                    "BrainRot Tracker uses Android's Accessibility API to read screen content " +
+                        "from Instagram, YouTube, TikTok and Snapchat only, in order to count the " +
+                        "short videos you watch.\n\n" +
+                        "This data is processed and stored on your device. If you later sign in and " +
+                        "enable cloud backup, only your daily totals are uploaded to your private " +
+                        "account. Nothing is ever shared with third parties."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    sharedPrefs.edit().putBoolean("accessibility_disclosure_accepted", true).apply()
+                    showAccessibilityDisclosure = false
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }) { Text("Agree & Continue") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAccessibilityDisclosure = false }) { Text("Not now") }
+            }
+        )
     }
 
-    val allPermissionsGranted = hasAccessibility && hasOverlay && hasNotifications
+    val allGranted = hasAccessibility && hasOverlay && hasNotifications && hasUsageStats
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
-            .padding(24.dp)
+            .background(bg)
+            .padding(horizontal = 32.dp)
+            .padding(top = 96.dp, bottom = 24.dp)
             .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Header (Figma styled)
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-        ) {
+        // ── Logo ──────────────────────────────────────────────────────
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "FocusGuard",
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Black,
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(PrimaryCyan, PrimaryBlue)
-                    )
-                )
+                text = "✳",
+                fontSize = 22.sp,
+                color = textPrimary
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
-                text = "Step 1 of 4 · Permissions & Setup",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = TextSecondary
-                )
+                text = "BrainRot Tracker",
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Normal,
+                fontSize = 28.sp,
+                letterSpacing = (-0.3).sp,
+                color = textPrimary
             )
         }
 
         Spacer(Modifier.height(24.dp))
 
-        // 2. Body List
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        // ── Permission progress ───────────────────────────────────────
+        val grantedCount = listOf(hasAccessibility, hasOverlay, hasNotifications, hasUsageStats).count { it }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.width(240.dp)
+            ) {
+                repeat(4) { i ->
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (i < grantedCount) WarmGrantedGreen else stepDim)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = "Required Permissions",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.White
-                ),
-                modifier = Modifier.padding(bottom = 4.dp)
+                text = "$grantedCount OF 4 GRANTED",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 1.5.sp,
+                color = textSecondary
             )
+        }
 
-            // Accessibility Access Card
+        Spacer(Modifier.height(32.dp))
+
+        // ── Page title ────────────────────────────────────────────────
+        Text(
+            text = "Grant Permissions",
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.Normal,
+            fontSize = 36.sp,
+            letterSpacing = (-0.5).sp,
+            lineHeight = 41.sp,
+            color = textPrimary,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        // ── Permission cards ──────────────────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PermissionCard(
-                emoji = "👁️",
                 title = "Accessibility Access",
-                description = "Allows the app to detect reel and short video activity",
+                description = "Allows BrainRot Tracker to detect active apps and screen usage.",
                 isGranted = hasAccessibility,
-                onGrantClick = {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                surface = surface,
+                cardBorder = cardBorder,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                btnBg = bg,
+                onOpenSettings = {
+                    if (sharedPrefs.getBoolean("accessibility_disclosure_accepted", false)) {
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    } else {
+                        showAccessibilityDisclosure = true
+                    }
                 }
             )
-
-            // Overlay Permission Card
             PermissionCard(
-                emoji = "🔢",
                 title = "Overlay Permission",
-                description = "Allows the floating HUD to appear over other apps",
+                description = "Lets BrainRot Tracker show the floating counter over other apps.",
                 isGranted = hasOverlay,
-                onGrantClick = {
+                surface = surface,
+                cardBorder = cardBorder,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                btnBg = bg,
+                onOpenSettings = {
                     val intent = Intent(
                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         android.net.Uri.parse("package:${context.packageName}")
@@ -179,58 +259,78 @@ fun OnboardingScreen(
                     context.startActivity(intent)
                 }
             )
-
-            // Notification Access Card
             PermissionCard(
-                emoji = "🔔",
                 title = "Notification Access",
-                description = "Allows limit alerts and daily summary notifications",
+                description = "Enables daily focus summaries and gentle nudges.",
                 isGranted = hasNotifications,
-                onGrantClick = {
+                surface = surface,
+                cardBorder = cardBorder,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                btnBg = bg,
+                onOpenSettings = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        if (!notificationRequestAttempted) {
+                            // First tap: show the system permission dialog directly
+                            notificationRequestAttempted = true
+                            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            // Repeat denials don't re-show the dialog — fall back to settings
+                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            }
+                            context.startActivity(intent)
                         }
-                        context.startActivity(intent)
                     } else {
-                        val intent = Intent(Settings.ACTION_SETTINGS)
-                        context.startActivity(intent)
+                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
                     }
+                }
+            )
+            PermissionCard(
+                title = "Usage Access",
+                description = "Fetches accurate screen time directly from the system — the same data shown in Digital Wellbeing.",
+                isGranted = hasUsageStats,
+                surface = surface,
+                cardBorder = cardBorder,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary,
+                btnBg = bg,
+                onOpenSettings = {
+                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                 }
             )
         }
 
         Spacer(Modifier.height(32.dp))
 
-        // 3. Footer Action Buttons
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        // ── Footer ────────────────────────────────────────────────────
+        // Primary CTA reflects state: a clear "Continue" once everything is
+        // granted, otherwise a muted "Continue Anyway" with Skip still offered.
+        Button(
+            onClick = onComplete,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (allGranted) WarmAccent else stepDim,
+                contentColor = if (allGranted) Color.White else textPrimary
+            )
         ) {
-            Button(
-                onClick = onComplete,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (allPermissionsGranted) SuccessGreen else PrimaryCyan,
-                    contentColor = Color.Black
-                )
-            ) {
-                Text(
-                    text = if (allPermissionsGranted) "Continue" else "Skip & Continue",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            }
+            Text(
+                text = if (allGranted) "Continue" else "Continue Anyway",
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp
+            )
+        }
 
-            Spacer(Modifier.height(8.dp))
-
+        if (!allGranted) {
+            Spacer(Modifier.height(16.dp))
             TextButton(onClick = onComplete) {
                 Text(
-                    text = "Skip Setup",
-                    color = TextSecondary,
+                    text = "Skip for now",
+                    color = textSecondary,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 14.sp
                 )
             }
@@ -240,107 +340,109 @@ fun OnboardingScreen(
 
 @Composable
 private fun PermissionCard(
-    emoji: String,
     title: String,
     description: String,
     isGranted: Boolean,
-    onGrantClick: () -> Unit
+    surface: Color,
+    cardBorder: Color,
+    textPrimary: Color,
+    textSecondary: Color,
+    btnBg: Color,
+    onOpenSettings: () -> Unit
 ) {
-    GlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        accentColor = if (isGranted) SuccessGreen else WarningYellow
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(surface)
+            .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+            .padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Title row with status badge
         Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left icon container
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isGranted) SuccessGreen.copy(alpha = 0.15f)
-                        else WarningYellow.copy(alpha = 0.15f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = emoji, fontSize = 22.sp)
-            }
+            Text(
+                text = title,
+                fontWeight = FontWeight.Medium,
+                fontSize = 16.sp,
+                lineHeight = 22.sp,
+                color = textPrimary,
+                // Take the remaining width so the badge keeps its full size and never gets
+                // squeezed into a two-line "GRANTE D" on narrower screens.
+                modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp)
+            )
+            StatusBadge(isGranted = isGranted, cardBorder = cardBorder, textSecondary = textSecondary)
+        }
 
-            Spacer(Modifier.width(16.dp))
+        // Description
+        Text(
+            text = description,
+            fontSize = 14.sp,
+            lineHeight = 22.sp,
+            color = textSecondary
+        )
 
-            // Text section
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = Color.White
-                    )
+        // Open Settings button
+        OutlinedButton(
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = btnBg,
+                contentColor = textPrimary
+            )
+        ) {
+            Text(
+                text = "⚙  Open Settings",
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp
+            )
+        }
+    }
+}
 
-                    // Status pill
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isGranted) SuccessGreen.copy(alpha = 0.15f)
-                                else WarningYellow.copy(alpha = 0.15f)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (isGranted) "Granted" else "Pending",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = if (isGranted) SuccessGreen else WarningYellow
-                            )
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(4.dp))
-
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                    lineHeight = 16.sp
-                )
-
-                if (!isGranted) {
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedButton(
-                        onClick = onGrantClick,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp)
-                            .border(
-                                width = 1.dp,
-                                color = PrimaryCyan.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(8.dp)
-                            ),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = PrimaryCyan
-                        )
-                    ) {
-                        Text(
-                            text = "Open Settings",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
+@Composable
+private fun StatusBadge(isGranted: Boolean, cardBorder: Color, textSecondary: Color) {
+    if (isGranted) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50.dp))
+                .background(WarmGrantedGreen)
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        ) {
+            Text(
+                text = "GRANTED",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 1.sp,
+                color = Color.White,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50.dp))
+                .border(1.dp, cardBorder, RoundedCornerShape(50.dp))
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        ) {
+            Text(
+                text = "PENDING",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 1.sp,
+                color = textSecondary,
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }

@@ -16,6 +16,12 @@ interface StreakDao {
     @Query("SELECT * FROM streak_records WHERE date = :date")
     fun getByDate(date: String): Flow<StreakRecord?>
 
+    @Query("SELECT * FROM streak_records WHERE date = :date LIMIT 1")
+    suspend fun getByDateOnce(date: String): StreakRecord?
+
+    @Query("SELECT MAX(date) FROM streak_records")
+    suspend fun getLatestDate(): String?
+
     @Query("SELECT * FROM streak_records ORDER BY date ASC")
     fun getAll(): Flow<List<StreakRecord>>
 
