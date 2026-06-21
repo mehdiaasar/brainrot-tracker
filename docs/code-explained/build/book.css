@@ -1,0 +1,151 @@
+/* ===== LoopOut — The Code, Explained :: print stylesheet (WeasyPrint) ===== */
+
+/* ---- Page geometry & running header/footer ---- */
+@page {
+  size: A4;
+  margin: 22mm 17mm 20mm 17mm;
+  @top-left  { content: "LoopOut — The Code, Explained"; font: 8pt "Helvetica Neue", Helvetica, sans-serif; color: #b09a86; }
+  @top-right { content: string(chaptertitle);            font: 8pt "Helvetica Neue", Helvetica, sans-serif; color: #b09a86; }
+  @bottom-center { content: counter(page); font: 9pt "Helvetica Neue", Helvetica, sans-serif; color: #9a8472; }
+}
+@page :first { /* cover */
+  margin: 0;
+  @top-left { content: none; } @top-right { content: none; } @bottom-center { content: none; }
+}
+@page nochrome { /* part dividers / toc */
+  @top-left { content: none; } @top-right { content: none; }
+}
+
+/* ---- Base typography ---- */
+html { font-size: 11pt; }
+body {
+  font-family: "Palatino", "Palatino Linotype", "Georgia", serif;
+  color: #2e2018;
+  line-height: 1.5;
+  hyphens: auto;
+}
+p { margin: 0 0 0.65em 0; text-align: justify; }
+strong { color: #1f1610; }
+em { color: #5b4636; }
+a { color: #c2410c; text-decoration: none; }
+
+/* ---- Headings ---- */
+h1, h2, h3, h4 { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #7c2d12; line-height: 1.2; }
+section.chapter > h1 {
+  string-set: chaptertitle content();
+  font-size: 23pt;
+  margin: 0 0 2mm 0;
+  padding-bottom: 3mm;
+  border-bottom: 3px solid #f97316;
+  color: #9a3412;
+}
+.chapnum { display:block; font-size: 10pt; letter-spacing: 2px; text-transform: uppercase; color:#ea580c; margin-bottom:2mm; font-family:"Helvetica Neue",Helvetica,sans-serif; break-after: avoid; }
+h2 { font-size: 15pt; margin: 7mm 0 2mm; border-left: 4px solid #fb923c; padding-left: 3mm; }
+h3 { font-size: 12.5pt; margin: 5mm 0 1.5mm; color:#b45309; }
+h4 { font-size: 11pt; margin: 4mm 0 1mm; color:#92400e; }
+
+/* keep headings with following content */
+h1, h2, h3, h4 { break-after: avoid; }
+section.chapter { break-before: page; }
+
+/* PDF outline bookmarks */
+section.chapter > h1 { bookmark-level: 1; bookmark-label: content(); }
+h2 { bookmark-level: 2; bookmark-label: content(); }
+
+/* ---- Lists & tables ---- */
+ul, ol { margin: 0 0 0.7em 0; padding-left: 6mm; }
+li { margin: 0.15em 0; }
+table { border-collapse: collapse; width: 100%; margin: 3mm 0 4mm; font-size: 9.5pt; break-inside: avoid; }
+th, td { border: 1px solid #e7d3c1; padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
+th { background: #fff1e6; color: #9a3412; font-family:"Helvetica Neue",Helvetica,sans-serif; font-size:9pt; }
+tr:nth-child(even) td { background: #fffaf5; }
+
+/* ---- Code ---- */
+code { font-family: "Menlo", "Consolas", "DejaVu Sans Mono", monospace; font-size: 9pt; background: #fbf1e7; padding: 0.5pt 3pt; border-radius: 3px; color:#9a3412; }
+.codehilite {
+  background: #fdf6ee;
+  border: 1px solid #ecd9c6;
+  border-left: 4px solid #f97316;
+  border-radius: 6px;
+  padding: 2.5mm 3mm;
+  margin: 2.5mm 0 4mm;
+  break-inside: avoid;
+  overflow: hidden;
+}
+.codehilite pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.codehilite code { background: none; padding: 0; font-size: 8.6pt; color:#3a2a1e; line-height: 1.42; }
+
+/* ---- Callouts ---- */
+blockquote { margin: 3mm 0; padding: 2.5mm 3.5mm; border-radius: 6px; break-inside: avoid; background:#f6efe8; border-left:4px solid #c9b29c; font-size: 10pt; }
+blockquote p { margin: 0; text-align: left; }
+blockquote.concept { background: #eef5ff; border-left: 4px solid #3b82f6; }
+blockquote.concept strong { color:#1d4ed8; }
+blockquote.gotcha  { background: #fff7e6; border-left: 4px solid #f59e0b; }
+blockquote.gotcha strong { color:#b45309; }
+
+/* ---- Figures ---- */
+figure { margin: 4mm auto 5mm; text-align: center; break-inside: avoid; }
+figure img { border-radius: 8px; }
+figcaption { font-family:"Helvetica Neue",Helvetica,sans-serif; font-size: 8.5pt; color: #8a7060; margin-top: 1.5mm; font-style: italic; }
+figure.fig-screen img { max-height: 110mm; border: 1px solid #e7d3c1; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+figure.fig-art img    { max-height: 62mm; }
+/* width:100% + capped height so tall vertical flowcharts scale down to fit a page */
+figure.fig-wide img   { width: 100%; height: auto; max-width: 100%; max-height: 178mm; object-fit: contain; }
+figure.fig-strip img  { width: 100%; height: auto; max-width: 100%; max-height: 120mm; object-fit: contain; }
+.figband { display:flex; gap:5mm; justify-content:center; align-items:flex-start; flex-wrap:wrap; margin: 3mm 0 4mm; }
+.figband figure { margin: 0; flex: 0 1 auto; }
+
+/* ===================== COVER ===================== */
+.cover {
+  page: nochrome;
+  height: 297mm; width: 210mm;
+  background: linear-gradient(160deg, #fff3e6 0%, #ffe7d2 45%, #ffd9be 100%);
+  position: relative;
+  text-align: center;
+  break-after: page;
+}
+.cover .inner { padding: 38mm 22mm 0; }
+.cover img.icon { width: 42mm; border-radius: 22%; box-shadow: 0 6px 18px rgba(154,52,18,0.25); }
+.cover h1 { font-size: 40pt; color:#7c2d12; margin: 12mm 0 0; border:none; line-height:1.05; }
+.cover .tag { font-size: 16pt; color:#c2410c; font-family:"Helvetica Neue",Helvetica,sans-serif; margin-top: 5mm; }
+.cover .sub { font-size: 12pt; color:#92400e; margin-top: 10mm; font-family:"Helvetica Neue",Helvetica,sans-serif; }
+.cover .meta { position:absolute; bottom: 24mm; left:0; right:0; font-size: 10pt; color:#a8795c; font-family:"Helvetica Neue",Helvetica,sans-serif; }
+.cover .brainfig { position:absolute; bottom: 40mm; left:0; right:0; }
+.cover .brainfig img { height: 46mm; }
+
+/* ===================== PART DIVIDER ===================== */
+.part {
+  page: nochrome;
+  break-before: page;
+  height: 235mm;
+  display: flex; flex-direction: column; justify-content: center; align-items:center;
+  text-align:center;
+}
+.part .pkicker { font-family:"Helvetica Neue",Helvetica,sans-serif; letter-spacing:5px; text-transform:uppercase; color:#ea580c; font-size:12pt; }
+.part h1 { font-size: 30pt; border:none; color:#7c2d12; margin: 4mm 0 0; max-width: 150mm; }
+.part .pdesc { font-family:"Helvetica Neue",Helvetica,sans-serif; color:#92400e; font-size:12pt; margin-top:6mm; max-width: 130mm; line-height:1.5; }
+.part .pline { width: 28mm; height: 4px; background:#f97316; border-radius:2px; margin: 9mm auto 0; }
+
+/* ===================== ABOUT / TOC ===================== */
+.about, .toc { page: nochrome; break-before: page; }
+.about h1, .toc h1 { font-size: 24pt; border-bottom: 3px solid #f97316; padding-bottom:3mm; color:#9a3412; }
+.about .lead { font-size: 12pt; color:#5b4636; }
+
+.toc ol { list-style: none; padding: 0; margin: 6mm 0 0; }
+.toc .toc-part { font-family:"Helvetica Neue",Helvetica,sans-serif; font-weight:700; color:#9a3412; font-size:12pt; margin: 6mm 0 1mm; text-transform:uppercase; letter-spacing:1px; }
+.toc .toc-entry { font-size: 11pt; margin: 1.3mm 0; display:flex; align-items:baseline; }
+.toc .toc-entry a { color:#2e2018; flex: 1; }
+.toc .toc-entry a::after { content: leader('.') " " target-counter(attr(href), page); color:#b09a86; font-family:"Helvetica Neue",Helvetica,sans-serif; font-size:9.5pt; }
+.toc .toc-num { color:#ea580c; font-family:"Helvetica Neue",Helvetica,sans-serif; font-weight:700; width: 9mm; }
+
+/* Info grid (infographic blocks) */
+.grid { display:flex; flex-wrap:wrap; gap:4mm; margin: 4mm 0; }
+.grid .cell { flex: 1 1 45%; border:1px solid #e7d3c1; border-radius:8px; padding:3mm 3.5mm; background:#fffaf5; break-inside:avoid; }
+.grid .cell h4 { margin:0 0 1mm; color:#9a3412; }
+.grid .cell p { margin:0; font-size:9.5pt; text-align:left; color:#5b4636; }
+
+/* Stat chips */
+.stats { display:flex; gap:4mm; flex-wrap:wrap; margin:4mm 0; }
+.stat { flex:1 1 0; text-align:center; border:1px solid #e7d3c1; border-radius:8px; padding:3mm; background:#fff1e6; }
+.stat .n { font-family:"Helvetica Neue",Helvetica,sans-serif; font-size:20pt; font-weight:800; color:#ea580c; display:block; }
+.stat .l { font-size:8.5pt; color:#8a7060; font-family:"Helvetica Neue",Helvetica,sans-serif; }
