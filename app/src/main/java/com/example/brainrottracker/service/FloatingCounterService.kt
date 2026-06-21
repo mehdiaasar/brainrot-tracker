@@ -1,7 +1,9 @@
 package com.example.brainrottracker.service
 
 import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -37,6 +39,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.compose.ui.graphics.toArgb
 import com.example.brainrottracker.R
+import com.example.brainrottracker.data.local.prefs.Prefs
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.notification.NotificationHelper
 import com.example.brainrottracker.ui.screens.dashboard.DashboardMood
@@ -66,9 +69,12 @@ class FloatingCounterService : Service() {
     private var isViewAdded = false
     private var visible = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    // Slow zoom in/out "breathing" played only when brain health is critical. Scale reads as a
+    // gentle pulse rather than the opacity blink it replaced, which flickered badly over video.
     private var criticalAnimator: ObjectAnimator? = null
 
     private lateinit var prefs: SharedPreferences
+    private val notifHelper by lazy { NotificationHelper(applicationContext) }
 
     // Latest stats, kept so the popup can render the current snapshot.
     private var currentTotal = 0
@@ -98,11 +104,11 @@ class FloatingCounterService : Service() {
 
     companion object {
         private const val TAG = "FloatingCounter"
-        const val PREFS = "brainrot_prefs"
+        const val PREFS = Prefs.FILE
         /** Global snooze expiry (epoch millis) — one key for all apps, since blocking is total-based. */
-        const val SNOOZE_KEY = "snooze_until_all"
-        const val KEY_SCALE = "hud_scale"
-        const val KEY_THEME = "theme_mode"
+        const val SNOOZE_KEY = Prefs.SNOOZE_UNTIL_ALL
+        const val KEY_SCALE = Prefs.HUD_SCALE
+        const val KEY_THEME = Prefs.THEME_MODE
         const val DEFAULT_SCALE = 1.2f
         /** How far the oversized Brain bleeds beyond the capsule, in dp (pre-scale). */
         private const val BLEED_DP = 30f
@@ -127,25 +133,8 @@ class FloatingCounterService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notificationHelper = NotificationHelper(applicationContext)
-        notificationHelper.createChannels()
-        startForeground(NotificationHelper.SERVICE_NOTIFICATION_ID, notificationHelper.getServiceNotification())
-
-        if (intent != null && intent.action == "com.example.brainrottracker.UPDATE_HUD") {
-            val count = intent.getIntExtra("count", 0)
-            val limit = intent.getIntExtra("limit", 30)
-            val name = intent.getStringExtra("platform") ?: "Instagram"
-            val ratio = if (limit > 0) count.toFloat() / limit else 0f
-            val health = ((1f - ratio).coerceIn(0f, 1f) * 100).toInt()
-            val p = Platform.entries.find { it.displayName == name }
-            updateHud(
-                count,
-                health,
-                if (p != null) listOf(HudPlatform(p, count, limit)) else emptyList(),
-                ratio
-            )
-            show()
-        }
+        notifHelper.createChannels()
+        startForeground(NotificationHelper.SERVICE_NOTIFICATION_ID, notifHelper.getServiceNotification())
         return START_STICKY
     }
 
@@ -232,8 +221,10 @@ class FloatingCounterService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
+            // Default to the top-centre. The window carries BLEED_DP of top padding (room for the
+            // oversized brain), so a small y still clears the status bar while reading as "top".
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = dp(80f)
+            y = dp(8f)
         }
 
         attachTouchHandler()
@@ -260,10 +251,11 @@ class FloatingCounterService : Service() {
             }
             requestLayout()
         }
-        // The overlay window wraps the root view, so pad it to leave room for the bleeding
-        // Brain (otherwise the window edge would clip it). The capsule still looks compact.
+        // The overlay window wraps the root view, so pad it on every side to leave room for the
+        // bleeding Brain and for the critical-health zoom (otherwise the window edge clips them).
+        // Symmetric padding also centres the compact capsule exactly under the window.
         val bleed = dp(BLEED_DP * scale)
-        rootView?.setPadding(bleed, bleed, 0, bleed)
+        rootView?.setPadding(bleed, bleed, bleed, bleed)
     }
 
     /**
@@ -324,9 +316,9 @@ class FloatingCounterService : Service() {
 
     /**
      * Keep the visible pill within the screen while still letting it touch every edge. The window
-     * is wider/taller than the pill (it carries [BLEED_DP] padding on the left/top/bottom so the
-     * oversized Brain can bleed out), so the clamp accounts for that padding rather than the raw
-     * window size. Uses CENTER_HORIZONTAL/TOP gravity, matching [layoutParams].
+     * is wider/taller than the pill (it carries [BLEED_DP] padding on all four sides so the
+     * oversized Brain can bleed out and the critical zoom has room), so the clamp accounts for that
+     * padding rather than the raw window size. Uses CENTER_HORIZONTAL/TOP gravity, matching [layoutParams].
      */
     private fun clampToScreen() {
         val lp = layoutParams ?: return
@@ -337,9 +329,9 @@ class FloatingCounterService : Service() {
         val w = resources.displayMetrics.widthPixels
         val h = resources.displayMetrics.heightPixels
         val bleed = dp(BLEED_DP * scale)
-        // x is an offset from the horizontal centre; right padding is 0, left padding is bleed.
+        // x is an offset from the horizontal centre; padding is bleed on both left and right.
         val xMin = -((w - ww) / 2) - bleed
-        val xMax = (w - ww) / 2
+        val xMax = (w - ww) / 2 + bleed
         // y is an offset from the top; top and bottom padding are both bleed.
         val yMin = -bleed
         val yMax = h - wh + bleed
@@ -404,12 +396,6 @@ class FloatingCounterService : Service() {
         }
     }
 
-    /** Legacy entry point retained for the manual UPDATE_HUD test path. */
-    fun updateCount(totalCount: Int) {
-        val health = ((1f - totalCount / 120f).coerceIn(0f, 1f) * 100).toInt()
-        updateHud(totalCount, health, emptyList())
-    }
-
     /**
      * Update the pill with today's [total] reel count, overall brain [health] (0..100), the
      * per-platform [breakdown] used to populate the tap-to-open popup, and the usage [reelRatio]
@@ -424,6 +410,14 @@ class FloatingCounterService : Service() {
             val ratio = if (reelRatio >= 0f) reelRatio else (1f - currentHealth / 100f)
             currentMood = DashboardMood.fromUsage(ratio)
 
+            // Keep the foreground notification's brain + stats in sync with the current mood/health.
+            runCatching {
+                getSystemService(NotificationManager::class.java)?.notify(
+                    NotificationHelper.SERVICE_NOTIFICATION_ID,
+                    notifHelper.getServiceNotification(currentMood, currentTotal, currentHealth)
+                )
+            }
+
             countTextView?.text = "$total"
             countTextView?.setTextColor(currentMood.accent.toArgb())
             brainView?.setImageResource(currentMood.mainRes)
@@ -432,11 +426,17 @@ class FloatingCounterService : Service() {
             applyBrainSize()
             brainView?.requestLayout()
 
-            // Gentle pulse when the brain is in a bad way.
+            // Slow zoom in/out when the brain is in a bad way — a gentle "breathing" attention cue.
+            // The window carries bleed padding on every side, so the centre-pivot zoom grows into
+            // that slack rather than off a window edge (which used to truncate the count).
             if (currentHealth < 25) {
                 if (criticalAnimator == null) {
-                    criticalAnimator = ObjectAnimator.ofFloat(pill, "alpha", 0.65f, 1f).apply {
-                        duration = 800
+                    criticalAnimator = ObjectAnimator.ofPropertyValuesHolder(
+                        pill,
+                        PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.12f),
+                        PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.12f),
+                    ).apply {
+                        duration = 1100
                         repeatMode = ValueAnimator.REVERSE
                         repeatCount = ValueAnimator.INFINITE
                         start()
@@ -445,7 +445,8 @@ class FloatingCounterService : Service() {
             } else {
                 criticalAnimator?.cancel()
                 criticalAnimator = null
-                pill?.alpha = 1f
+                pill?.scaleX = 1f
+                pill?.scaleY = 1f
             }
 
             if (isPopupAdded) refreshPopupContent()
@@ -496,6 +497,32 @@ class FloatingCounterService : Service() {
         val scrim = popupView as? FrameLayout ?: return
         scrim.removeAllViews()
         scrim.addView(buildPopupCard(), centeredCardParams())
+    }
+
+    /** A pill action button shared by the popup and blocking overlays. [primary] = filled accent. */
+    private fun actionButton(
+        label: String,
+        primary: Boolean,
+        leftMargin: Int = 0,
+        onClick: () -> Unit,
+    ): TextView = TextView(this).apply {
+        text = label
+        textSize = 14f
+        gravity = Gravity.CENTER
+        setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            .apply { this.leftMargin = leftMargin }
+        if (primary) {
+            setTextColor(Color.WHITE)
+            setTypeface(Typeface.DEFAULT_BOLD)
+            background = GradientDrawable().apply {
+                cornerRadius = dp(100f).toFloat()
+                setColor(accentColor)
+            }
+        } else {
+            setTextColor(textSecondaryColor)
+        }
+        setOnClickListener { onClick() }
     }
 
     private fun buildPopupCard(): View {
@@ -620,30 +647,8 @@ class FloatingCounterService : Service() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(8f), 0, 0)
         }
-        actions.addView(TextView(ctx).apply {
-            text = "Open app"
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            setTypeface(Typeface.DEFAULT_BOLD)
-            gravity = Gravity.CENTER
-            setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(100f).toFloat()
-                setColor(accentColor)
-            }
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            setOnClickListener { openApp() }
-        })
-        actions.addView(TextView(ctx).apply {
-            text = "Close"
-            setTextColor(textSecondaryColor)
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { leftMargin = dp(8f) }
-            setOnClickListener { removePopup() }
-        })
+        actions.addView(actionButton("Open app", primary = true) { openApp() })
+        actions.addView(actionButton("Close", primary = false, leftMargin = dp(8f)) { removePopup() })
         card.addView(actions)
 
         return card
@@ -770,55 +775,24 @@ class FloatingCounterService : Service() {
             gravity = Gravity.CENTER_VERTICAL
         }
         // Primary action in every mode: leave the blocked app.
-        actions.addView(TextView(this).apply {
-            text = "Close app"
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            setTypeface(Typeface.DEFAULT_BOLD)
-            gravity = Gravity.CENTER
-            setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(100f).toFloat()
-                setColor(accentColor)
-            }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setOnClickListener {
-                removeBlockingOverlay()
-                ReelCounterService.instance?.performGlobalAction(
-                    android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
-                )
-            }
+        actions.addView(actionButton("Close app", primary = true) {
+            removeBlockingOverlay()
+            ReelCounterService.instance?.performGlobalAction(
+                android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
+            )
         })
         // Secondary action depends on the mode; HARD offers no way to keep scrolling.
         when (mode) {
             BlockingMode.HARD -> Unit
-            BlockingMode.SNOOZE -> actions.addView(TextView(this).apply {
-                text = "Snooze 5 min"
-                setTextColor(textSecondaryColor)
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    .apply { leftMargin = dp(8f) }
-                setOnClickListener {
-                    prefs.edit()
-                        .putLong(SNOOZE_KEY, System.currentTimeMillis() + BlockingMode.SNOOZE_MS)
-                        .apply()
-                    removeBlockingOverlay()
-                }
+            BlockingMode.SNOOZE -> actions.addView(actionButton("Snooze 5 min", primary = false, leftMargin = dp(8f)) {
+                prefs.edit()
+                    .putLong(SNOOZE_KEY, System.currentTimeMillis() + BlockingMode.SNOOZE_MS)
+                    .apply()
+                removeBlockingOverlay()
             })
-            BlockingMode.REMIND -> actions.addView(TextView(this).apply {
-                text = "Got it"
-                setTextColor(textSecondaryColor)
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setPadding(dp(16f), dp(12f), dp(16f), dp(12f))
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    .apply { leftMargin = dp(8f) }
-                setOnClickListener {
-                    remindDismissedThisSession = true
-                    removeBlockingOverlay()
-                }
+            BlockingMode.REMIND -> actions.addView(actionButton("Got it", primary = false, leftMargin = dp(8f)) {
+                remindDismissedThisSession = true
+                removeBlockingOverlay()
             })
         }
         card.addView(actions)

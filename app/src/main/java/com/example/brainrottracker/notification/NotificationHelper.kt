@@ -6,9 +6,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.brainrottracker.MainActivity
+import com.example.brainrottracker.R
+import com.example.brainrottracker.ui.screens.dashboard.DashboardMood
 
 class NotificationHelper(private val context: Context) {
 
@@ -51,7 +54,7 @@ class NotificationHelper(private val context: Context) {
                 "Tracking Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows when BrainRot Tracker is actively monitoring"
+                description = "Shows when LoopOut is actively monitoring"
                 setShowBadge(false)
             }
 
@@ -84,8 +87,8 @@ class NotificationHelper(private val context: Context) {
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_MILESTONES)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("$emoji BrainRot Alert")
+            .setSmallIcon(R.drawable.ic_brain_notification)
+            .setContentTitle("$emoji LoopOut Alert")
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
@@ -115,7 +118,7 @@ class NotificationHelper(private val context: Context) {
         val timeStr = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_DAILY_SUMMARY)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_brain_notification)
             .setContentTitle("📊 Today's Recap")
             .setContentText("$totalReels reels • $timeStr screen time • $healthEmoji $brainHealth% brain health")
             .setStyle(
@@ -131,21 +134,35 @@ class NotificationHelper(private val context: Context) {
         manager.notify(DAILY_SUMMARY_ID, notification)
     }
 
-    fun getServiceNotification(): Notification {
+    /**
+     * The ongoing foreground-service notification. The status-bar symbol is the brain silhouette;
+     * the expanded view shows the current [mood]'s brain (full colour) and updates as the user
+     * scrolls — re-posted from [FloatingCounterService.updateHud].
+     */
+    fun getServiceNotification(
+        mood: DashboardMood = DashboardMood.GREAT,
+        total: Int = 0,
+        health: Int = 100,
+    ): Notification {
         val intent = Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(context, CHANNEL_SERVICE)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("BrainRot Tracker Active")
-            .setContentText("Monitoring your screen time")
+        val text = if (total > 0) "$total reels today • $health% brain health"
+        else "Monitoring your screen time"
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_SERVICE)
+            .setSmallIcon(R.drawable.ic_brain_notification)
+            .setContentTitle("LoopOut Active")
+            .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .build()
+
+        BitmapFactory.decodeResource(context.resources, mood.mainRes)?.let { builder.setLargeIcon(it) }
+        return builder.build()
     }
 
     fun resetDailyMilestones() {

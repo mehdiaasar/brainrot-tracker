@@ -1,5 +1,7 @@
 package com.example.brainrottracker.service
 
+import com.example.brainrottracker.data.local.prefs.Prefs
+
 /**
  * How the blocking overlay behaves once a platform's daily limit is reached.
  *
@@ -13,7 +15,7 @@ enum class BlockingMode {
     HARD, SNOOZE, REMIND;
 
     companion object {
-        const val PREF_KEY = "blocking_mode"
+        const val PREF_KEY = Prefs.BLOCKING_MODE
         const val SNOOZE_MS = 5 * 60_000L
 
         fun fromPref(value: String?): BlockingMode =

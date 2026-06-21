@@ -1,0 +1,19 @@
+digraph G {
+  bgcolor="#FFF8F2";
+  rankdir=TB;
+  fontname="Helvetica";
+  node [shape=box style="rounded,filled" fontname="Helvetica" fontsize=12 color="#E7D3C1" fillcolor="#FFFFFF" fontcolor="#3D2A1F" margin="0.18,0.10" penwidth=1.4];
+  edge [color="#B08968" fontname="Helvetica" fontsize=10 fontcolor="#7A5A44" penwidth=1.3 arrowsize=0.8];
+  "tick" [label="Accessibility event fires\ncheckDayRollover()" fillcolor="#FFE9D8" fontcolor="#EA580C" shape=box];
+  "new" [label="Date changed since\nlast counted day?" fillcolor="#FFFFFF" fontcolor="#3D2A1F" shape=diamond];
+  "nochange" [label="Continue" fillcolor="#DCFCE7" fontcolor="#15803D" shape=box];
+  "reset" [label="Reset in-memory\nper-platform counts" fillcolor="#FFFFFF" fontcolor="#3D2A1F" shape=box];
+  "streak" [label="evaluateStreaksUpTo(yesterday)\n→ back-fill StreakRecord rows" fillcolor="#EDE4FF" fontcolor="#7C3AED" shape=box];
+  "summary" [label="Show daily-summary notification\n(only if gap is exactly 1 day)" fillcolor="#FFFFFF" fontcolor="#3D2A1F" shape=box];
+  "rearm" [label="Re-arm milestone notifications" fillcolor="#FFFFFF" fontcolor="#3D2A1F" shape=box];
+  "sync2" [label="Kick optional cloud sync" fillcolor="#DBEAFE" fontcolor="#2563EB" shape=box];
+  tick -> new;
+  new -> nochange [label="no"];
+  new -> reset [label="yes (midnight)"];
+  reset -> streak -> summary -> rearm -> sync2;
+}

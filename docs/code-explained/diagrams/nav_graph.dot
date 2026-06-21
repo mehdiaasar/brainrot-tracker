@@ -1,0 +1,19 @@
+digraph G {
+  bgcolor="#FFF8F2";
+  rankdir=LR;
+  fontname="Helvetica";
+  node [shape=box style="rounded,filled" fontname="Helvetica" fontsize=12 color="#E7D3C1" fillcolor="#FFFFFF" fontcolor="#3D2A1F" margin="0.18,0.10" penwidth=1.4];
+  edge [color="#B08968" fontname="Helvetica" fontsize=10 fontcolor="#7A5A44" penwidth=1.3 arrowsize=0.8];
+  "onb" [label="Onboarding\n(permissions + prominent\ndisclosure dialog)" fillcolor="#FFE9D8" fontcolor="#EA580C" shape=box];
+  "signin" [label="GoogleSignIn\n(optional, skippable)" fillcolor="#DBEAFE" fontcolor="#2563EB" shape=box];
+  "dash" [label="Dashboard" fillcolor="#EDE4FF" fontcolor="#7C3AED" shape=box];
+  "stats" [label="Stats" fillcolor="#FFFFFF" fontcolor="#3D2A1F" shape=box];
+  "streaks" [label="Streaks" fillcolor="#FFFFFF" fontcolor="#3D2A1F" shape=box];
+  "limits" [label="Limits\n(+ Account card)" fillcolor="#FFFFFF" fontcolor="#3D2A1F" shape=box];
+  onb -> signin [label="finish setup"];
+  signin -> dash [label="sign in / skip"];
+  onb -> dash [label="already enabled" style=dashed];
+  dash -> stats [dir=both]; dash -> streaks [dir=both]; dash -> limits [dir=both];
+  stats -> streaks [dir=both style=dotted]; streaks -> limits [dir=both style=dotted];
+  limits -> signin [label="Account card" style=dashed constraint=false];
+}

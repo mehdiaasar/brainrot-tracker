@@ -50,7 +50,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,22 +57,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.brainrottracker.CLOUD_SYNC_ENABLED
 import com.example.brainrottracker.R
 import com.example.brainrottracker.data.local.prefs.AppPreferences
+import com.example.brainrottracker.data.local.prefs.Prefs
 import com.example.brainrottracker.service.BlockingMode
+import com.example.brainrottracker.theme.AppTheme
 import com.example.brainrottracker.theme.ThemeController
-import com.example.brainrottracker.theme.WarmBackground
-import com.example.brainrottracker.theme.WarmBorder
-import com.example.brainrottracker.theme.WarmLightBackground
-import com.example.brainrottracker.theme.WarmLightBorder
-import com.example.brainrottracker.theme.WarmLightSurface
-import com.example.brainrottracker.theme.WarmLightText
-import com.example.brainrottracker.theme.WarmLightTextSecondary
-import com.example.brainrottracker.theme.WarmStepDim
-import com.example.brainrottracker.theme.WarmSurface
-import com.example.brainrottracker.theme.WarmText
-import com.example.brainrottracker.theme.WarmTextSecondary
-import com.example.brainrottracker.theme.rememberIsDark
+import com.example.brainrottracker.ui.components.PillToggleButton
+import com.example.brainrottracker.ui.components.WarmToggle
 
 // Screen-local accents tuned to the Daily Limits mock.
 private val SetOrange = Color(0xFFF26B21)
@@ -88,14 +80,15 @@ fun LimitsScreen(
     onBack: () -> Unit = {},
     viewModel: LimitsViewModel = viewModel()
 ) {
-    val dark = rememberIsDark()
-    val bg = if (dark) WarmBackground else WarmLightBackground
-    val surface = if (dark) WarmSurface else WarmLightSurface
-    val cardBorder = if (dark) WarmBorder else WarmLightBorder
-    val trackInactive = if (dark) WarmStepDim else Color(0xFFE7E2DA)
-    val pillUnselectedBg = if (dark) WarmStepDim else Color(0xFFF1EFEB)
-    val textPrimary = if (dark) WarmText else WarmLightText
-    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
+    val colors = AppTheme.colors
+    val dark = colors.isDark
+    val bg = colors.background
+    val surface = colors.surface
+    val cardBorder = colors.border
+    val trackInactive = colors.trackInactive
+    val pillUnselectedBg = if (dark) colors.surfaceAlt else Color(0xFFF1EFEB)
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
     val videoCardBg = if (dark) Color(0xFF272320) else Color(0xFFFDF6F0)
     val purpleSoftBg = if (dark) Color(0xFF272233) else Color(0xFFF2ECFD)
     val balanceCardBg = if (dark) Color(0xFF1F261E) else Color(0xFFEDF4EC)
@@ -103,18 +96,18 @@ fun LimitsScreen(
 
     val limits by viewModel.limits.collectAsState()
     val context = LocalContext.current
-    val sharedPrefs = remember { context.getSharedPreferences("brainrot_prefs", Context.MODE_PRIVATE) }
+    val sharedPrefs = remember { context.getSharedPreferences(Prefs.FILE, Context.MODE_PRIVATE) }
 
     val initialReelLimit = limits.firstOrNull()?.dailyReelLimit?.toFloat() ?: 50f
     val initialMinuteLimit = limits.firstOrNull()?.dailyMinuteLimit?.toFloat() ?: 60f
 
     var reelLimit by remember(initialReelLimit) { mutableFloatStateOf(initialReelLimit) }
     var minuteLimit by remember(initialMinuteLimit) { mutableFloatStateOf(initialMinuteLimit) }
-    var blockingEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("blocking_enabled", false)) }
+    var blockingEnabled by remember { mutableStateOf(sharedPrefs.getBoolean(Prefs.BLOCKING_ENABLED, false)) }
     var blockingMode by remember {
         mutableStateOf(BlockingMode.fromPref(sharedPrefs.getString(BlockingMode.PREF_KEY, null)))
     }
-    var hudScale by remember { mutableFloatStateOf(sharedPrefs.getFloat("hud_scale", 1.2f)) }
+    var hudScale by remember { mutableFloatStateOf(sharedPrefs.getFloat(Prefs.HUD_SCALE, 1.2f)) }
 
     val signedInUser by remember { AppPreferences.userFlow(context) }
         .collectAsState(initial = null)
@@ -179,7 +172,8 @@ fun LimitsScreen(
 
             // Account: signed-in users get a centered profile header (avatar + name + email);
             // signed-out users keep the "Sign in with Google" card.
-            item {
+            // Hidden entirely for v1 until Firebase is configured — see CLOUD_SYNC_ENABLED.
+            if (CLOUD_SYNC_ENABLED) item {
                 val user = signedInUser
                 if (user != null) {
                     val initial = user.name.ifEmpty { user.email }
@@ -378,9 +372,7 @@ fun LimitsScreen(
                                 viewModel.updateGlobalLimits(reelLimit.toInt(), minuteLimit.toInt())
                             },
                             valueRange = 0f..200f,
-                            sliderColors = sliderColors,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary
+                            sliderColors = sliderColors
                         )
 
                         LimitSliderRow(
@@ -393,9 +385,7 @@ fun LimitsScreen(
                                 viewModel.updateGlobalLimits(reelLimit.toInt(), minuteLimit.toInt())
                             },
                             valueRange = 0f..240f,
-                            sliderColors = sliderColors,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary
+                            sliderColors = sliderColors
                         )
                     }
                 }
@@ -452,7 +442,7 @@ fun LimitsScreen(
                                 checked = blockingEnabled,
                                 onCheckedChange = {
                                     blockingEnabled = it
-                                    sharedPrefs.edit().putBoolean("blocking_enabled", it).apply()
+                                    sharedPrefs.edit().putBoolean(Prefs.BLOCKING_ENABLED, it).apply()
                                 },
                                 offColor = cardBorder
                             )
@@ -469,8 +459,6 @@ fun LimitsScreen(
                                         accent = SetPurple,
                                         selectedBg = purpleSoftBg,
                                         unselectedBg = pillUnselectedBg,
-                                        textPrimary = textPrimary,
-                                        textSecondary = textSecondary,
                                         onClick = {
                                             blockingMode = BlockingMode.HARD
                                             sharedPrefs.edit().putString(BlockingMode.PREF_KEY, BlockingMode.HARD.name).apply()
@@ -483,8 +471,6 @@ fun LimitsScreen(
                                         accent = SetPurple,
                                         selectedBg = purpleSoftBg,
                                         unselectedBg = pillUnselectedBg,
-                                        textPrimary = textPrimary,
-                                        textSecondary = textSecondary,
                                         onClick = {
                                             blockingMode = BlockingMode.SNOOZE
                                             sharedPrefs.edit().putString(BlockingMode.PREF_KEY, BlockingMode.SNOOZE.name).apply()
@@ -497,8 +483,6 @@ fun LimitsScreen(
                                         accent = SetPurple,
                                         selectedBg = purpleSoftBg,
                                         unselectedBg = pillUnselectedBg,
-                                        textPrimary = textPrimary,
-                                        textSecondary = textSecondary,
                                         onClick = {
                                             blockingMode = BlockingMode.REMIND
                                             sharedPrefs.edit().putString(BlockingMode.PREF_KEY, BlockingMode.REMIND.name).apply()
@@ -603,8 +587,6 @@ fun LimitsScreen(
                                 accent = SetOrange,
                                 selectedBg = themeSelectedBg,
                                 unselectedBg = pillUnselectedBg,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
                                 modifier = Modifier.weight(1f),
                                 onClick = { ThemeController.selectMode(ThemeController.Mode.LIGHT) }
                             )
@@ -615,8 +597,6 @@ fun LimitsScreen(
                                 accent = SetOrange,
                                 selectedBg = themeSelectedBg,
                                 unselectedBg = pillUnselectedBg,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
                                 modifier = Modifier.weight(1f),
                                 onClick = { ThemeController.selectMode(ThemeController.Mode.DARK) }
                             )
@@ -627,8 +607,6 @@ fun LimitsScreen(
                                 accent = SetOrange,
                                 selectedBg = themeSelectedBg,
                                 unselectedBg = pillUnselectedBg,
-                                textPrimary = textPrimary,
-                                textSecondary = textSecondary,
                                 modifier = Modifier.weight(1f),
                                 onClick = { ThemeController.selectMode(ThemeController.Mode.SYSTEM) }
                             )
@@ -702,7 +680,7 @@ fun LimitsScreen(
                                 value = hudScale,
                                 onValueChange = { hudScale = it },
                                 onValueChangeFinished = {
-                                    sharedPrefs.edit().putFloat("hud_scale", hudScale).apply()
+                                    sharedPrefs.edit().putFloat(Prefs.HUD_SCALE, hudScale).apply()
                                 },
                                 valueRange = 0.8f..1.8f,
                                 modifier = Modifier.fillMaxWidth(),
@@ -780,9 +758,10 @@ private fun LimitSliderRow(
     onValueChangeFinished: () -> Unit,
     valueRange: ClosedFloatingPointRange<Float>,
     sliderColors: androidx.compose.material3.SliderColors,
-    textPrimary: Color,
-    textSecondary: Color
 ) {
+    val colors = AppTheme.colors
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -820,69 +799,3 @@ private fun LimitSliderRow(
     }
 }
 
-@Composable
-private fun PillToggleButton(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    accent: Color,
-    selectedBg: Color,
-    unselectedBg: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    val shape = RoundedCornerShape(10.dp)
-    Row(
-        modifier = modifier
-            .clip(shape)
-            .background(if (selected) selectedBg else unselectedBg)
-            .then(
-                if (selected) Modifier.border(1.5.dp, accent, shape) else Modifier
-            )
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 6.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (selected) accent else textSecondary,
-            modifier = Modifier.size(17.dp)
-        )
-        Spacer(Modifier.width(5.dp))
-        Text(
-            label,
-            color = if (selected) textPrimary else textSecondary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun WarmToggle(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    offColor: Color = WarmLightBorder
-) {
-    Box(
-        modifier = Modifier
-            .size(width = 48.dp, height = 28.dp)
-            .clip(CircleShape)
-            .background(if (checked) SetOrange else offColor)
-            .clickable { onCheckedChange(!checked) }
-            .padding(4.dp),
-        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart
-    ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(Color.White)
-        )
-    }
-}

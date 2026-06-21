@@ -43,25 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brainrottracker.R
-import com.example.brainrottracker.theme.WarmAccent
-import com.example.brainrottracker.theme.WarmBackground
-import com.example.brainrottracker.theme.WarmBorder
-import com.example.brainrottracker.theme.WarmGrantedGreen
-import com.example.brainrottracker.theme.WarmInsightAccent
-import com.example.brainrottracker.theme.WarmInsightAccentDark
-import com.example.brainrottracker.theme.WarmInsightBg
-import com.example.brainrottracker.theme.WarmInsightBgDark
-import com.example.brainrottracker.theme.WarmLightBackground
-import com.example.brainrottracker.theme.WarmLightBorder
-import com.example.brainrottracker.theme.WarmLightInner
-import com.example.brainrottracker.theme.WarmLightSurface
-import com.example.brainrottracker.theme.WarmLightText
-import com.example.brainrottracker.theme.WarmLightTextSecondary
-import com.example.brainrottracker.theme.WarmStepDim
-import com.example.brainrottracker.theme.WarmSurface
-import com.example.brainrottracker.theme.WarmText
-import com.example.brainrottracker.theme.WarmTextSecondary
-import com.example.brainrottracker.theme.rememberIsDark
+import com.example.brainrottracker.theme.AppTheme
 
 // ── Milestone model ─────────────────────────────────────────────────────────
 // Each tier of the "journey". Thresholds drive both the hero card and the
@@ -117,8 +99,7 @@ private fun heroImageFor(streak: Int): Int = when {
     else -> R.drawable.streak_hero_1
 }
 
-// Fixed warm-on-bright colors used over the hero scene (legible in both themes).
-private val HeroPurple = Color(0xFF6D28D9)
+// Fixed dark inks drawn over the bright hero scene (purple comes from AppTheme.colors.heroPurple).
 private val HeroInk = Color(0xFF2E2A26)
 private val HeroInkSoft = Color(0xFF54504A)
 
@@ -128,15 +109,13 @@ fun StreaksScreen(
     onOpenSettings: () -> Unit = {},
     viewModel: StreaksViewModel = viewModel()
 ) {
-    val dark = rememberIsDark()
-    val bg = if (dark) WarmBackground else WarmLightBackground
-    val surface = if (dark) WarmSurface else WarmLightSurface
-    val cardBorder = if (dark) WarmBorder else WarmLightBorder
-    val inner = if (dark) WarmStepDim else WarmLightInner
-    val textPrimary = if (dark) WarmText else WarmLightText
-    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
-    val purple = if (dark) WarmInsightAccentDark else WarmInsightAccent
-    val purpleBg = if (dark) WarmInsightBgDark else WarmInsightBg
+    val colors = AppTheme.colors
+    val bg = colors.background
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val surface = colors.surface
+    val purple = colors.insightAccent
+    val purpleBg = colors.insightBg
 
     val state by viewModel.streakState.collectAsState()
     val streak = state.currentStreak
@@ -176,7 +155,7 @@ fun StreaksScreen(
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "Keep going, you're doing great! 💪",
-                        color = WarmAccent,
+                        color = colors.accent,
                         fontSize = 14.sp,
                         lineHeight = 18.sp
                     )
@@ -187,7 +166,7 @@ fun StreaksScreen(
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(surface)
-                        .border(1.dp, cardBorder, CircleShape)
+                        .border(1.dp, colors.border, CircleShape)
                         .clickable(onClick = onOpenSettings),
                     contentAlignment = Alignment.Center
                 ) {
@@ -262,14 +241,14 @@ fun StreaksScreen(
                 ) {
                     Text(
                         "Journey Progress",
-                        color = HeroPurple,
+                        color = colors.heroPurple,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "$percent%",
-                        color = HeroPurple,
+                        color = colors.heroPurple,
                         fontSize = 52.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-1.5).sp,
@@ -277,7 +256,7 @@ fun StreaksScreen(
                     )
                     Text(
                         "to ${nextMilestone.badgeName} 👑",
-                        color = HeroPurple,
+                        color = colors.heroPurple,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -318,7 +297,7 @@ fun StreaksScreen(
         }
 
         // ── Your Journey ───────────────────────────────────────────────────
-        item { SectionHeader("Your Journey", textPrimary) }
+        item { SectionHeader("Your Journey") }
         item {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 20.dp),
@@ -332,13 +311,7 @@ fun StreaksScreen(
                     JourneyCard(
                         m = m,
                         reached = reached,
-                        inProgress = inProgress,
-                        surface = surface,
-                        border = cardBorder,
-                        purple = purple,
-                        purpleBg = purpleBg,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary
+                        inProgress = inProgress
                     )
                 }
             }
@@ -381,7 +354,7 @@ fun StreaksScreen(
         }
 
         // ── Achievements ───────────────────────────────────────────────────
-        item { SectionHeader("Achievements", textPrimary) }
+        item { SectionHeader("Achievements") }
         item {
             val firstLocked = BADGES.indexOfFirst { state.longestStreak < it.requirement }
             LazyRow(
@@ -395,13 +368,7 @@ fun StreaksScreen(
                         badge = b,
                         unlocked = state.longestStreak >= b.requirement,
                         showProgress = i == firstLocked,
-                        progressNow = streak.coerceAtMost(b.requirement),
-                        surface = surface,
-                        border = cardBorder,
-                        inner = inner,
-                        purple = purple,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary
+                        progressNow = streak.coerceAtMost(b.requirement)
                     )
                 }
             }
@@ -451,7 +418,7 @@ fun StreaksScreen(
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun SectionHeader(title: String, textPrimary: Color) {
+private fun SectionHeader(title: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -461,7 +428,7 @@ private fun SectionHeader(title: String, textPrimary: Color) {
         Text(
             title,
             fontWeight = FontWeight.SemiBold,
-            color = textPrimary,
+            color = AppTheme.colors.textPrimary,
             fontSize = 19.sp,
             modifier = Modifier.weight(1f)
         )
@@ -470,6 +437,7 @@ private fun SectionHeader(title: String, textPrimary: Color) {
 
 @Composable
 private fun HeroProgressBar(progress: Float) {
+    val colors = AppTheme.colors
     val barShape = RoundedCornerShape(4.dp)
     Box(
         Modifier
@@ -483,7 +451,7 @@ private fun HeroProgressBar(progress: Float) {
                 .fillMaxWidth(progress.coerceAtLeast(0.02f))
                 .fillMaxSize()
                 .clip(barShape)
-                .background(HeroPurple)
+                .background(colors.heroPurple)
         )
         // Star marker riding the fill edge.
         Box(
@@ -502,26 +470,21 @@ private fun JourneyCard(
     m: Milestone,
     reached: Boolean,
     inProgress: Boolean,
-    surface: Color,
-    border: Color,
-    purple: Color,
-    purpleBg: Color,
-    textPrimary: Color,
-    textSecondary: Color
 ) {
+    val colors = AppTheme.colors
     val titleColor = when {
-        reached -> WarmGrantedGreen
-        inProgress -> purple
-        else -> textSecondary
+        reached -> colors.success
+        inProgress -> colors.insightAccent
+        else -> colors.textSecondary
     }
     Column(
         modifier = Modifier
             .width(124.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (inProgress) purpleBg else surface)
+            .background(if (inProgress) colors.insightBg else colors.surface)
             .border(
                 1.dp,
-                if (inProgress) purple.copy(alpha = 0.5f) else border,
+                if (inProgress) colors.insightAccent.copy(alpha = 0.5f) else colors.border,
                 RoundedCornerShape(16.dp)
             )
             .padding(vertical = 10.dp, horizontal = 6.dp),
@@ -548,18 +511,18 @@ private fun JourneyCard(
                 Icon(
                     Icons.Filled.Lock,
                     contentDescription = null,
-                    tint = textSecondary,
+                    tint = colors.textSecondary,
                     modifier = Modifier.size(22.dp)
                 )
             }
         }
         Spacer(Modifier.height(4.dp))
-        Text(m.journeySub, color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(m.journeySub, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(6.dp))
         when {
             reached -> StatusCheck()
-            inProgress -> Text("In Progress", color = purple, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            else -> Text("Locked", color = textSecondary, fontSize = 12.sp)
+            inProgress -> Text("In Progress", color = colors.insightAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            else -> Text("Locked", color = colors.textSecondary, fontSize = 12.sp)
         }
     }
 }
@@ -570,19 +533,14 @@ private fun AchievementCard(
     unlocked: Boolean,
     showProgress: Boolean,
     progressNow: Int,
-    surface: Color,
-    border: Color,
-    inner: Color,
-    purple: Color,
-    textPrimary: Color,
-    textSecondary: Color
 ) {
+    val colors = AppTheme.colors
     Column(
         modifier = Modifier
             .width(140.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(surface)
-            .border(1.dp, border, RoundedCornerShape(16.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.border, RoundedCornerShape(16.dp))
             .padding(vertical = 16.dp, horizontal = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -603,11 +561,11 @@ private fun AchievementCard(
             )
         }
         Spacer(Modifier.height(6.dp))
-        Text(badge.name, color = textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(badge.name, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(2.dp))
         Text(
             "${badge.requirement} day streak",
-            color = textSecondary,
+            color = colors.textSecondary,
             fontSize = 12.sp
         )
         Spacer(Modifier.height(10.dp))
@@ -619,7 +577,7 @@ private fun AchievementCard(
                         .fillMaxWidth()
                         .height(6.dp)
                         .clip(CircleShape)
-                        .background(inner)
+                        .background(colors.surfaceAlt)
                 ) {
                     Box(
                         Modifier
@@ -628,13 +586,13 @@ private fun AchievementCard(
                             )
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(purple)
+                            .background(colors.insightAccent)
                     )
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
                     "$progressNow / ${badge.requirement}",
-                    color = purple,
+                    color = colors.insightAccent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -642,7 +600,7 @@ private fun AchievementCard(
             else -> Icon(
                 Icons.Filled.Lock,
                 contentDescription = "Locked",
-                tint = textSecondary,
+                tint = colors.textSecondary,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -655,7 +613,7 @@ private fun StatusCheck() {
         modifier = Modifier
             .size(22.dp)
             .clip(CircleShape)
-            .background(WarmGrantedGreen),
+            .background(AppTheme.colors.success),
         contentAlignment = Alignment.Center
     ) {
         Icon(

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BrainRot Tracker</string>
-    <string name="accessibility_service_description">BrainRot Tracker uses this service to read screen content from Instagram, YouTube, TikTok, and Snapchat only, in order to count the short videos you watch. The data is processed and stored on your device; if you sign in and enable cloud backup, only daily totals are uploaded to your private account. Nothing is shared with third parties.</string>
+    <string name="app_name">LoopOut</string>
+    <string name="accessibility_service_description">LoopOut uses this service to read screen content from Instagram, YouTube, TikTok, and Snapchat only, in order to count the short videos you watch. The data is processed and stored only on your device and is never shared with third parties.</string>
     <string name="notification_channel_milestones">Reel Milestones</string>
     <string name="notification_channel_summary">Daily Summary</string>
     <string name="notification_channel_service">Tracking Service</string>
-    <string name="service_notification_title">BrainRot Tracker Active</string>
+    <string name="service_notification_title">LoopOut Active</string>
     <string name="service_notification_text">Monitoring your screen time</string>
     <!-- Replace with your Web Client ID from Google Cloud Console -->
     <string name="google_web_client_id">YOUR_WEB_CLIENT_ID_HERE</string>

@@ -1,6 +1,7 @@
 package com.example.brainrottracker.data.sync
 
 import android.content.Context
+import com.example.brainrottracker.data.local.prefs.Prefs
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.data.repository.UsageRepository
 import com.example.brainrottracker.data.util.ScreenTimeHelper
@@ -67,8 +68,8 @@ class UsageSyncManager(
     }
 
     companion object {
-        const val PREFS = "brainrot_prefs"
-        const val KEY_ENABLED = "cloud_sync_enabled"
-        const val KEY_LAST_SYNCED = "last_synced_date"
+        const val PREFS = Prefs.FILE
+        const val KEY_ENABLED = Prefs.CLOUD_SYNC_ENABLED
+        const val KEY_LAST_SYNCED = Prefs.LAST_SYNCED_DATE
     }
 }

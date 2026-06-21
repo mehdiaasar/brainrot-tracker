@@ -7,7 +7,7 @@ import com.example.brainrottracker.theme.WarmGrantedGreen
 
 /**
  * The five dashboard "variations": every mood swaps the hero, insight, and reminder
- * characters plus all the dynamic copy, mirroring the FocusCenter mock screens.
+ * characters plus all the dynamic copy, mirroring the LoopOut mock screens.
  *
  * Picked from how far today's usage is into the daily limits — see [fromUsage].
  */

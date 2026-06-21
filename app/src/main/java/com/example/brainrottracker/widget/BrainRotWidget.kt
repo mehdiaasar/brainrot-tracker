@@ -2,6 +2,7 @@ package com.example.brainrottracker.widget
 
 import android.content.Context
 import android.content.res.Configuration
+import com.example.brainrottracker.data.local.prefs.Prefs
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -60,8 +61,8 @@ class BrainRotWidget : GlanceAppWidget() {
 
     /** Same theme resolution as the floating HUD: user pref, falling back to system. */
     private fun resolveIsDark(context: Context): Boolean {
-        val prefs = context.getSharedPreferences("brainrot_prefs", Context.MODE_PRIVATE)
-        return when (prefs.getString("theme_mode", "SYSTEM")) {
+        val prefs = context.getSharedPreferences(Prefs.FILE, Context.MODE_PRIVATE)
+        return when (prefs.getString(Prefs.THEME_MODE, "SYSTEM")) {
             "LIGHT" -> false
             "DARK" -> true
             else -> {
