@@ -1,14 +1,20 @@
-# Privacy Policy — BrainRot Tracker
+# Privacy Policy — LoopOut
 
-**Last updated:** 17 June 2026
+**Last updated:** 18 June 2026
 
-BrainRot Tracker ("the app", "we", "us") is a digital-wellness app that helps you
+LoopOut ("the app", "we", "us") is a digital-wellness app that helps you
 track and limit how many short-form videos ("reels", "Shorts", "Spotlight",
 TikToks) you watch on social media. This policy explains exactly what data the app
 accesses, how it is used, and the choices you have.
 
 We do **not** sell your data, show ads, or use third-party advertising or analytics
 SDKs.
+
+> **Current version (v1):** LoopOut works **fully offline and entirely on your
+> device**. It collects and transmits **no** data. Google Sign-In and the optional
+> cloud backup described below are **not available in this version** — they are
+> documented here for transparency and are planned for a future update. Until then,
+> nothing you do in the app ever leaves your phone.
 
 ---
 
@@ -74,6 +80,9 @@ This data never leaves your device unless you explicitly enable cloud backup
 ---
 
 ## Optional cloud backup
+
+*Not available in the current version (v1) — planned for a future update. The
+description below applies only once the feature ships.*
 
 If — and only if — you (a) sign in with Google **and** (b) turn on the "cloud
 backup" setting, the app uploads one summary document per completed day to a private

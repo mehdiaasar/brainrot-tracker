@@ -1,4 +1,4 @@
-# Play Console — Accessibility (AccessibilityService) Declaration
+# Play Console — Accessibility (AccessibilityService) Declaration — LoopOut
 
 This document holds the answers to paste into the Google Play Console **Permissions
 declaration form** for the `BIND_ACCESSIBILITY_SERVICE` / `AccessibilityService`
@@ -56,20 +56,18 @@ disable it at any time.
 
 ## 5. Prominent disclosure wording (shown in-app before enabling)
 
-> **BrainRot Tracker needs the Accessibility service**
+The app shows this dialog (verbatim from `OnboardingScreen.kt`) before the
+Accessibility settings screen is ever opened:
+
+> **How Accessibility is used**
 >
-> To count reels, Shorts, Spotlight, and TikToks — and to block them once you hit
-> your daily limit — BrainRot Tracker uses Android's Accessibility service to detect
-> when you're scrolling a short-video feed in Instagram, YouTube, TikTok, or
-> Snapchat.
+> LoopOut uses Android's Accessibility API to read screen content from Instagram,
+> YouTube, TikTok and Snapchat only, in order to count the short videos you watch.
 >
-> It only watches these four apps, and only to count videos and enforce the limits
-> you set. It never reads or stores your messages, captions, or any other content,
-> and nothing about what you watch ever leaves your device.
+> This data is processed and stored only on your device — it never leaves your phone
+> and is never shared with third parties.
 >
-> You can turn this off any time in Settings → Accessibility.
->
-> [ Not now ]   [ Continue ]
+> [ Not now ]   [ Agree & Continue ]
 
 ---
 
@@ -79,13 +77,13 @@ The Accessibility service processes on-screen information **on-device only**, in
 real time, solely to count short-form videos and trigger limit enforcement. It does
 **not** collect, log, store, or transmit the content of any app. The app contains no
 ads and no third-party analytics. See the privacy policy for full details:
-**[INSERT HOSTED PRIVACY POLICY URL]**
+**https://mehdiaasar.github.io/loopOut/**
 
 ---
 
 ## 7. Links to provide on the form
 
-- **Privacy policy URL:** [INSERT HOSTED URL — see docs/PRIVACY_POLICY.md]
+- **Privacy policy URL:** https://mehdiaasar.github.io/loopOut/
 - **Video walkthrough (recommended):** Google often asks for a short screen
   recording showing (a) the prominent-disclosure dialog, (b) enabling the service,
   and (c) the reel-counting / blocking feature in action. Record one before

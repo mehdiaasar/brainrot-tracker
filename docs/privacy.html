@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoopOut — Privacy Policy</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         max-width: 760px; margin: 0 auto; padding: 40px 22px 80px; line-height: 1.6;
+         color: #141413; background: #FAF9F5; }
+  h1 { font-size: 2rem; letter-spacing: -0.5px; }
+  h2 { margin-top: 2em; border-bottom: 1px solid #E6DFD8; padding-bottom: .3em; }
+  h3 { margin-top: 1.6em; }
+  a { color: #CC785C; }
+  code { background: #EFE9DE; padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+  hr { border: none; border-top: 1px solid #E6DFD8; margin: 2em 0; }
+  ul { padding-left: 1.3em; }
+  blockquote { margin: 1.4em 0; padding: 14px 18px; border-left: 4px solid #CC785C;
+               background: #EFE9DE; border-radius: 0 8px 8px 0; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #FAF9F5; background: #181715; }
+    h2,hr { border-color: #2F2C28; }
+    code, blockquote { background: #252320; }
+  }
+</style>
+</head>
+<body>
+<h1>Privacy Policy — LoopOut</h1>
+<p><strong>Last updated:</strong> 18 June 2026</p>
+<p>LoopOut ("the app", "we", "us") is a digital-wellness app that helps you</p>
+<p>track and limit how many short-form videos ("reels", "Shorts", "Spotlight",</p>
+<p>TikToks) you watch on social media. This policy explains exactly what data the app</p>
+<p>accesses, how it is used, and the choices you have.</p>
+<p>We do <strong>not</strong> sell your data, show ads, or use third-party advertising or analytics</p>
+<p>SDKs.</p>
+<blockquote><strong>Current version (v1):</strong> LoopOut works **fully offline and entirely on your device<strong>. It collects and transmits </strong>no** data. Google Sign-In and the optional cloud backup described below are <strong>not available in this version</strong> — they are documented here for transparency and are planned for a future update. Until then, nothing you do in the app ever leaves your phone.</blockquote>
+<hr>
+<h2>Summary</h2>
+<ul>
+<li>All of your usage data is stored <strong>locally on your device</strong> by default.</li>
+<li>The app reads on-screen content <strong>only</strong> from Instagram, YouTube, TikTok, and</li>
+</ul>
+<p>  Snapchat, and <strong>only</strong> to count short-form videos and enforce the limits you set.</p>
+<ul>
+<li>The content of the videos you watch is <strong>never</strong> recorded, stored, or transmitted.</li>
+<li>Cloud backup is <strong>optional, off by default</strong>, and uploads only daily *numerical</li>
+</ul>
+<p>  summaries* — never screen content.</p>
+<hr>
+<h2>What data the app accesses</h2>
+<h3>1. On-screen content (Accessibility Service)</h3>
+<p>To count reels and enforce your limits, the app uses Android's Accessibility</p>
+<p>Service. It inspects the on-screen view hierarchy of a **restricted list of apps</p>
+<p>only**:</p>
+<ul>
+<li>Instagram (<code>com.instagram.android</code>)</li>
+<li>YouTube (<code>com.google.android.youtube</code>)</li>
+<li>TikTok (<code>com.zhiliaoapp.musically</code>)</li>
+<li>Snapchat (<code>com.snapchat.android</code>)</li>
+</ul>
+<p>The service detects when a full-screen short-form video feed is being scrolled and</p>
+<p>increments a counter. **It does not read, log, store, or transmit the text,</p>
+<p>images, messages, captions, or any other content of these apps.** Detection happens</p>
+<p>on-device in real time and only the resulting <em>count</em> is kept.</p>
+<p>The service is enabled only after an explicit consent screen, and you can disable it</p>
+<p>at any time in <strong>Android Settings → Accessibility</strong>.</p>
+<h3>2. Screen-time data (Usage Access)</h3>
+<p>With your permission, the app reads Android's app-usage statistics to show how many</p>
+<p>minutes you spent in the tracked apps. This is queried live from the system and is</p>
+<p><strong>not stored</strong> in the app's database.</p>
+<h3>3. Account information (optional)</h3>
+<p>If you choose to sign in with Google to enable cloud backup, the app receives your</p>
+<p>Google account identifier and basic profile information (name, email, avatar) via</p>
+<p>Google Sign-In / Firebase Authentication. Sign-in is entirely optional — the app is</p>
+<p>fully functional without an account.</p>
+<hr>
+<h2>Data stored on your device</h2>
+<p>The following is stored locally on your device and is required for the app to</p>
+<p>function:</p>
+<ul>
+<li>Daily counts of short-form videos watched, per platform</li>
+<li>The daily limits you set</li>
+<li>Streak history and a derived "brain health" score</li>
+</ul>
+<p>This data never leaves your device unless you explicitly enable cloud backup</p>
+<p>(below).</p>
+<hr>
+<h2>Optional cloud backup</h2>
+<p>*Not available in the current version (v1) — planned for a future update. The</p>
+<p>description below applies only once the feature ships.*</p>
+<p>If — and only if — you (a) sign in with Google <strong>and</strong> (b) turn on the "cloud</p>
+<p>backup" setting, the app uploads one summary document per completed day to a private</p>
+<p>Google Firebase Firestore database scoped to your account</p>
+<p>(<code>users/{your-account-id}/dailyLogs/{date}</code>). Each document contains only **numeric</p>
+<p>daily aggregates**:</p>
+<ul>
+<li>Per-platform video counts for the day</li>
+<li>Per-platform daily limits</li>
+<li>Per-platform minutes (yesterday only)</li>
+<li>The day's "brain health" score</li>
+<li>Streak status and streak day number</li>
+</ul>
+<p>No screen content, no message text, no browsing history, and no real-time activity</p>
+<p>is ever uploaded. Backup is off by default and can be turned off at any time in the</p>
+<p>app's settings. Your data is readable only by your authenticated account.</p>
+<hr>
+<h2>How we use the data</h2>
+<p>The data is used solely to provide the app's features: counting short-form videos,</p>
+<p>enforcing the limits you set, showing your stats and streaks, and (optionally)</p>
+<p>backing up your daily summaries to your own account. We do not use it for</p>
+<p>advertising, profiling, or any purpose unrelated to the app's stated function, and</p>
+<p>we do not share it with third parties.</p>
+<hr>
+<h2>Third-party services</h2>
+<ul>
+<li><strong>Google Firebase (Authentication &amp; Firestore)</strong> — used only if you opt into</li>
+</ul>
+<p>  Google Sign-In and cloud backup. Governed by Google's privacy policy:</p>
+<p>  <a href="https://policies.google.com/privacy">https://policies.google.com/privacy</a></p>
+<p>No other third-party services receive your data.</p>
+<hr>
+<h2>Data retention and deletion</h2>
+<ul>
+<li><strong>Local data:</strong> removed when you uninstall the app or clear its storage from</li>
+</ul>
+<p>  Android Settings.</p>
+<ul>
+<li><strong>Cloud backup data:</strong> you can disable backup at any time. To delete data already</li>
+</ul>
+<p>  uploaded, sign in, turn off backup, and contact us at the address below to request</p>
+<p>  deletion of your stored documents; we will remove them.</p>
+<hr>
+<h2>Children</h2>
+<p>The app is not directed at children under 13 and does not knowingly collect data</p>
+<p>from them.</p>
+<hr>
+<h2>Changes to this policy</h2>
+<p>We may update this policy as the app evolves. Material changes will be reflected by</p>
+<p>updating the "Last updated" date above.</p>
+<hr>
+<h2>Contact</h2>
+<p>For privacy questions or data-deletion requests, contact:</p>
+<p><strong>Aasar Mehdi</strong> — mehdiaasar0@gmail.com</p>
+</body>
+</html>
