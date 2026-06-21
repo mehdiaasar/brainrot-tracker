@@ -2,6 +2,7 @@ package com.example.brainrottracker
 
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,15 +50,10 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import com.example.brainrottracker.theme.WarmAccent
-import com.example.brainrottracker.theme.WarmBackground
-import com.example.brainrottracker.theme.WarmBorder
-import com.example.brainrottracker.theme.WarmLightBackground
-import com.example.brainrottracker.theme.WarmLightBorder
-import com.example.brainrottracker.theme.WarmLightTextSecondary
-import com.example.brainrottracker.theme.WarmTextSecondary
+import com.example.brainrottracker.theme.AppTheme
+import com.example.brainrottracker.theme.Motion
+import com.example.brainrottracker.ui.components.pressScale
 import com.example.brainrottracker.data.local.prefs.AppPreferences
-import com.example.brainrottracker.theme.rememberIsDark
 import com.example.brainrottracker.ui.screens.dashboard.DashboardScreen
 import com.example.brainrottracker.ui.screens.limits.LimitsScreen
 import com.example.brainrottracker.ui.screens.onboarding.OnboardingScreen
@@ -77,10 +73,10 @@ private data class InitState(val accessibilityEnabled: Boolean, val signedIn: Bo
 @Composable
 fun MainNavigation() {
     val context = LocalContext.current
-    val dark = rememberIsDark()
-    val navBg = if (dark) WarmBackground else WarmLightBackground
-    val navBorder = if (dark) WarmBorder else WarmLightBorder
-    val inactiveColor = if (dark) WarmTextSecondary else WarmLightTextSecondary
+    val colors = AppTheme.colors
+    val navBg = colors.background
+    val navBorder = colors.border
+    val inactiveColor = colors.textSecondary
 
     // Read startup state asynchronously before building the nav back stack.
     // We only need the first emission — once we know where to start, we stop collecting.
@@ -161,11 +157,16 @@ fun MainNavigation() {
                     ) {
                         bottomNavItems.forEach { item ->
                             val isSelected = currentDestination == item.key
-                            val itemColor = if (isSelected) WarmAccent else inactiveColor
+                            val itemColor by animateColorAsState(
+                                if (isSelected) colors.accent else inactiveColor,
+                                Motion.colorSpec, label = "navItemColor"
+                            )
+                            val interaction = remember { MutableInteractionSource() }
                             Column(
                                 modifier = Modifier
+                                    .pressScale(interaction)
                                     .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
+                                        interactionSource = interaction,
                                         indication = null
                                     ) { selectTab(item.key) }
                                     .padding(horizontal = 16.dp),
@@ -204,7 +205,8 @@ fun MainNavigation() {
                                 backStack.removeLastOrNull()
                                 backStack += Dashboard
                                 // Offer the optional sign-in once after onboarding
-                                if (initState?.signedIn == false) backStack += GoogleSignIn
+                                // (hidden for v1 until Firebase is configured — see CLOUD_SYNC_ENABLED)
+                                if (CLOUD_SYNC_ENABLED && initState?.signedIn == false) backStack += GoogleSignIn
                             },
                             modifier = Modifier.padding(16.dp)
                         )

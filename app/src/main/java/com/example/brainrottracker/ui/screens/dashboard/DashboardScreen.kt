@@ -2,10 +2,12 @@ package com.example.brainrottracker.ui.screens.dashboard
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -57,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,34 +70,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.data.util.ScreenTimeHelper
 import com.example.brainrottracker.service.ReelCounterService
-import com.example.brainrottracker.theme.WarmAccent
-import com.example.brainrottracker.theme.WarmBackground
-import com.example.brainrottracker.theme.WarmBorder
-import com.example.brainrottracker.theme.WarmError
-import com.example.brainrottracker.theme.WarmGoalBlue
-import com.example.brainrottracker.theme.WarmGrantedGreen
-import com.example.brainrottracker.theme.WarmInsightAccent
-import com.example.brainrottracker.theme.WarmInsightAccentDark
-import com.example.brainrottracker.theme.WarmInsightBg
-import com.example.brainrottracker.theme.WarmInsightBgDark
-import com.example.brainrottracker.theme.WarmLightBackground
-import com.example.brainrottracker.theme.WarmLightBorder
-import com.example.brainrottracker.theme.WarmLightInner
-import com.example.brainrottracker.theme.WarmLightSurface
-import com.example.brainrottracker.theme.WarmLightText
-import com.example.brainrottracker.theme.WarmLightTextSecondary
-import com.example.brainrottracker.theme.WarmStepDim
-import com.example.brainrottracker.theme.WarmSurface
-import com.example.brainrottracker.theme.WarmText
-import com.example.brainrottracker.theme.WarmTextSecondary
-import com.example.brainrottracker.theme.rememberIsDark
+import com.example.brainrottracker.theme.AppTheme
+import com.example.brainrottracker.theme.Motion
+import com.example.brainrottracker.ui.components.AnimatedCounter
 import com.example.brainrottracker.ui.components.MoodCharacter
 import com.example.brainrottracker.ui.components.PlatformLogo
+import com.example.brainrottracker.ui.components.appCard
+import com.example.brainrottracker.ui.components.pressScale
 import kotlin.math.abs
 import androidx.compose.ui.util.lerp as lerpFloat
-
-/** Warm amber used for the "nearing limit" tier across the dashboard. */
-private val DashAmber = Color(0xFFE8A55A)
 
 private val HeaderMax = 388.dp
 private val HeaderMin = 224.dp
@@ -107,13 +91,7 @@ fun DashboardScreen(
     onEditPlan: () -> Unit = {},
     viewModel: DashboardViewModel = viewModel()
 ) {
-    val dark = rememberIsDark()
-    val bg = if (dark) WarmBackground else WarmLightBackground
-    val surface = if (dark) WarmSurface else WarmLightSurface
-    val cardBorder = if (dark) WarmBorder else WarmLightBorder
-    val trackBg = if (dark) WarmStepDim else WarmLightInner
-    val textPrimary = if (dark) WarmText else WarmLightText
-    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
+    val bg = AppTheme.colors.background
 
     val context = LocalContext.current
     val todayLog by viewModel.todayLog.collectAsState()
@@ -195,15 +173,10 @@ fun DashboardScreen(
     val listState = rememberLazyListState()
 
     Column(modifier = modifier.fillMaxSize().background(bg)) {
-        DashboardTopBar(
-            isTracking = isTracking,
-            trackBg = trackBg,
-            textPrimary = textPrimary,
-            textSecondary = textSecondary,
-        )
+        DashboardTopBar(isTracking = isTracking)
 
         if (!hasUsagePermission) {
-            UsageAccessBanner(context, trackBg, textPrimary, textSecondary)
+            UsageAccessBanner(context)
         }
 
         Box(
@@ -227,13 +200,7 @@ fun DashboardScreen(
                         todayLog = todayLog,
                         score = brainHealth,
                         streak = currentStreak,
-                        onViewStreaks = onViewStreaks,
-                        surface = surface,
-                        cardBorder = cardBorder,
-                        trackBg = trackBg,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
-                        dark = dark
+                        onViewStreaks = onViewStreaks
                     )
                 }
 
@@ -243,12 +210,7 @@ fun DashboardScreen(
                         minuteLimit = minuteLimit,
                         mood = mood,
                         dailyGoalOnTrack = dailyGoalOnTrack,
-                        focusShield = focusShield,
-                        surface = surface,
-                        cardBorder = cardBorder,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
-                        dark = dark
+                        focusShield = focusShield
                     )
                 }
 
@@ -256,8 +218,7 @@ fun DashboardScreen(
                     InsightBar(
                         mood = mood,
                         todayReels = totalReels,
-                        yesterdayReels = yesterdayLog?.getTotalReels() ?: 0,
-                        dark = dark
+                        yesterdayReels = yesterdayLog?.getTotalReels() ?: 0
                     )
                 }
 
@@ -268,25 +229,12 @@ fun DashboardScreen(
                         timeLabel = timeLabel,
                         minuteLimit = minuteLimit,
                         screenTimeToday = screenTimeToday,
-                        onEditPlan = onEditPlan,
-                        surface = surface,
-                        cardBorder = cardBorder,
-                        trackBg = trackBg,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
-                        dark = dark
+                        onEditPlan = onEditPlan
                     )
                 }
 
                 item {
-                    ReminderCard(
-                        mood = mood,
-                        surface = surface,
-                        cardBorder = cardBorder,
-                        textPrimary = textPrimary,
-                        textSecondary = textSecondary,
-                        dark = dark
-                    )
+                    ReminderCard(mood = mood)
                 }
 
                 item { Spacer(Modifier.height(16.dp)) }
@@ -300,11 +248,7 @@ fun DashboardScreen(
                     .graphicsLayer { translationY = headerOffsetPx }
                     .background(bg),
                 fraction = fraction,
-                mood = mood,
-                surface = surface,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                dark = dark
+                mood = mood
             )
         }
     }
@@ -314,10 +258,11 @@ fun DashboardScreen(
 @Composable
 private fun DashboardTopBar(
     isTracking: Boolean,
-    trackBg: Color,
-    textPrimary: Color,
-    textSecondary: Color,
 ) {
+    val colors = AppTheme.colors
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val trackBg = colors.surfaceAlt
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -331,7 +276,7 @@ private fun DashboardTopBar(
         ) {
             Text("✳", color = textPrimary, fontSize = 18.sp)
             Text(
-                "FocusCenter",
+                "LoopOut",
                 fontWeight = FontWeight.Medium,
                 color = textPrimary,
                 fontSize = 16.sp,
@@ -339,8 +284,8 @@ private fun DashboardTopBar(
             )
         }
 
-        val badgeBg = if (isTracking) WarmAccent else trackBg
-        val badgeContent = if (isTracking) Color.White else textSecondary
+        val badgeBg by animateColorAsState(if (isTracking) colors.accent else trackBg, Motion.colorSpec, label = "badgeBg")
+        val badgeContent by animateColorAsState(if (isTracking) Color.White else textSecondary, Motion.colorSpec, label = "badgeContent")
         Row(
             modifier = Modifier
                 .clip(CircleShape)
@@ -372,11 +317,12 @@ private fun HeroHeader(
     modifier: Modifier,
     fraction: Float,
     mood: DashboardMood,
-    surface: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val surface = colors.surface
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val dark = colors.isDark
     BoxWithConstraints(modifier = modifier) {
         val side = 20.dp
         val contentW = maxWidth - side * 2
@@ -439,12 +385,6 @@ private fun StatsCluster(
     score: Int,
     streak: Int,
     onViewStreaks: () -> Unit,
-    surface: Color,
-    cardBorder: Color,
-    trackBg: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
     Column(
         modifier = Modifier
@@ -460,22 +400,11 @@ private fun StatsCluster(
                 totalReels = totalReels,
                 reelLimit = reelLimit,
                 todayLog = todayLog,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                surface = surface,
-                cardBorder = cardBorder,
-                trackBg = trackBg,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                dark = dark
+                modifier = Modifier.weight(1f).fillMaxHeight()
             )
             ScoreRing(
                 score = score,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                surface = surface,
-                cardBorder = cardBorder,
-                trackBg = trackBg,
-                textSecondary = textSecondary,
-                dark = dark
+                modifier = Modifier.weight(1f).fillMaxHeight()
             )
             // Inline streak column — width grows with the collapse.
             if (fraction > 0.02f) {
@@ -486,12 +415,7 @@ private fun StatsCluster(
                         .weight(fraction)
                         .fillMaxHeight()
                         .graphicsLayer { alpha = fraction }
-                        .clipToBounds(),
-                    surface = surface,
-                    cardBorder = cardBorder,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary,
-                    dark = dark
+                        .clipToBounds()
                 )
             }
         }
@@ -514,12 +438,7 @@ private fun StatsCluster(
                 StreakBar(
                     streak = streak,
                     onClick = onViewStreaks,
-                    modifier = Modifier.fillMaxWidth().height(74.dp),
-                    surface = surface,
-                    cardBorder = cardBorder,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary,
-                    dark = dark
+                    modifier = Modifier.fillMaxWidth().height(74.dp)
                 )
             }
         }
@@ -533,18 +452,16 @@ private fun ReelsCard(
     reelLimit: Int,
     todayLog: com.example.brainrottracker.data.local.db.entity.DailyLog?,
     modifier: Modifier,
-    surface: Color,
-    cardBorder: Color,
-    trackBg: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val trackBg = colors.surfaceAlt
     val ratio = if (reelLimit > 0) totalReels / reelLimit.toFloat() else 0f
     val fillColor = when {
-        ratio < 0.75f -> WarmGrantedGreen
-        ratio < 1f -> DashAmber
-        else -> WarmError
+        ratio < 0.75f -> colors.success
+        ratio < 1f -> colors.warning
+        else -> colors.error
     }
     val usedPlatforms = Platform.entries.mapNotNull { p ->
         val count = todayLog?.getReelsForPlatform(p) ?: 0
@@ -552,24 +469,31 @@ private fun ReelsCard(
     }
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = !colors.isDark,
+                borderColor = colors.border,
+                shadow = if (colors.isDark) 0.dp else 3.dp,
+            )
             .padding(12.dp)
     ) {
         Text("Reels Scrolled Today", color = textSecondary, fontSize = 12.sp, lineHeight = 15.sp, maxLines = 2)
         Spacer(Modifier.height(6.dp))
-        Text(
-            "$totalReels",
-            fontWeight = FontWeight.Bold,
-            color = textPrimary,
-            fontSize = 34.sp,
-            lineHeight = 36.sp,
-            letterSpacing = (-1).sp,
-            maxLines = 1
+        AnimatedCounter(
+            count = totalReels,
+            style = TextStyle(
+                fontWeight = FontWeight.Bold,
+                color = textPrimary,
+                fontSize = 34.sp,
+                lineHeight = 36.sp,
+                letterSpacing = (-1).sp,
+            )
         )
         Text("/ $reelLimit videos", color = textSecondary, fontSize = 11.sp)
         Spacer(Modifier.height(8.dp))
+        val animatedRatio by animateFloatAsState(ratio.coerceIn(0f, 1f), Motion.floatSpec, label = "reelRatio")
+        val animatedFill by animateColorAsState(fillColor, Motion.colorSpec, label = "reelFill")
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -579,10 +503,10 @@ private fun ReelsCard(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(ratio.coerceIn(0f, 1f))
+                    .fillMaxWidth(animatedRatio)
                     .height(6.dp)
                     .clip(CircleShape)
-                    .background(fillColor)
+                    .background(animatedFill)
             )
         }
         Spacer(Modifier.height(10.dp))
@@ -607,23 +531,27 @@ private fun ReelsCard(
 private fun ScoreRing(
     score: Int,
     modifier: Modifier,
-    surface: Color,
-    cardBorder: Color,
-    trackBg: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val textSecondary = colors.textSecondary
+    val trackBg = colors.surfaceAlt
     val (label, ringColor) = when {
-        score >= 75 -> "HEALTHY" to WarmGrantedGreen
-        score >= 50 -> "MODERATE" to DashAmber
-        score >= 25 -> "POOR" to WarmError
-        else -> "VERY POOR" to WarmError
+        score >= 75 -> "HEALTHY" to colors.success
+        score >= 50 -> "MODERATE" to colors.warning
+        score >= 25 -> "POOR" to colors.error
+        else -> "VERY POOR" to colors.error
     }
+    val animatedScore by animateFloatAsState(score.toFloat(), Motion.floatSpec, label = "scoreSweep")
+    val animatedRing by animateColorAsState(ringColor, Motion.colorSpec, label = "scoreRing")
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = !colors.isDark,
+                borderColor = colors.border,
+                shadow = if (colors.isDark) 0.dp else 3.dp,
+            )
             .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -646,22 +574,23 @@ private fun ScoreRing(
                     startAngle = 0f, sweepAngle = 360f, useCenter = false,
                     style = Stroke(width = stroke), topLeft = topLeft, size = arcSize
                 )
-                if (score > 0) {
+                if (animatedScore > 0f) {
                     drawArc(
-                        color = ringColor,
-                        startAngle = -90f, sweepAngle = 360f * score / 100f, useCenter = false,
+                        color = animatedRing,
+                        startAngle = -90f, sweepAngle = 360f * animatedScore / 100f, useCenter = false,
                         style = Stroke(width = stroke, cap = StrokeCap.Round), topLeft = topLeft, size = arcSize
                     )
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    "$score",
-                    fontWeight = FontWeight.Bold,
-                    color = ringColor,
-                    fontSize = 28.sp,
-                    lineHeight = 30.sp,
-                    maxLines = 1
+                AnimatedCounter(
+                    count = score,
+                    style = TextStyle(
+                        fontWeight = FontWeight.Bold,
+                        color = animatedRing,
+                        fontSize = 28.sp,
+                        lineHeight = 30.sp,
+                    )
                 )
                 Text(
                     label,
@@ -682,30 +611,32 @@ private fun InlineStreak(
     streak: Int,
     onClick: () -> Unit,
     modifier: Modifier,
-    surface: Color,
-    cardBorder: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val interaction = remember { MutableInteractionSource() }
     val title = if (streak > 0) "$streak day streak!" else "No streak"
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
-            .clickable(onClick = onClick)
+            .pressScale(interaction)
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = !colors.isDark,
+                borderColor = colors.border,
+                shadow = if (colors.isDark) 0.dp else 3.dp,
+            )
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(12.dp),
         verticalArrangement = Arrangement.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("🔥", fontSize = 15.sp)
-            Text(title, fontWeight = FontWeight.Bold, color = textPrimary, fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2)
+            Text(title, fontWeight = FontWeight.Bold, color = colors.textPrimary, fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2)
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("View Streaks", color = WarmAccent, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            Text("›", color = WarmAccent, fontSize = 14.sp)
+            Text("View Streaks", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text("›", color = colors.accent, fontSize = 14.sp)
         }
     }
 }
@@ -716,12 +647,9 @@ private fun StreakBar(
     streak: Int,
     onClick: () -> Unit,
     modifier: Modifier,
-    surface: Color,
-    cardBorder: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val interaction = remember { MutableInteractionSource() }
     val (title, sub) = when {
         streak <= 0 -> "No streak yet" to "Stay under your limits today to start one."
         streak == 1 -> "You are on a 1-day streak!" to "Keep protecting your focus."
@@ -729,20 +657,25 @@ private fun StreakBar(
     }
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
-            .clickable(onClick = onClick)
+            .pressScale(interaction)
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = !colors.isDark,
+                borderColor = colors.border,
+                shadow = if (colors.isDark) 0.dp else 3.dp,
+            )
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("🔥", fontSize = 24.sp)
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontWeight = FontWeight.SemiBold, color = textPrimary, fontSize = 15.sp)
-            Text(sub, color = textSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(title, fontWeight = FontWeight.SemiBold, color = colors.textPrimary, fontSize = 15.sp)
+            Text(sub, color = colors.textSecondary, fontSize = 13.sp, lineHeight = 18.sp)
         }
-        Text("›", color = textSecondary, fontSize = 22.sp)
+        Text("›", color = colors.textSecondary, fontSize = 22.sp)
     }
 }
 
@@ -754,30 +687,32 @@ private fun TrackingTabs(
     mood: DashboardMood,
     dailyGoalOnTrack: Boolean,
     focusShield: FocusShield,
-    surface: Color,
-    cardBorder: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(bottom = 12.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = !colors.isDark,
+                borderColor = colors.border,
+                shadow = if (colors.isDark) 0.dp else 3.dp,
+            )
             .padding(vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         TrackingTab("⏱️", "Time Today", timeLabel, textPrimary, "/ ${minuteLimit}m", textPrimary, textSecondary)
-        TabDivider(cardBorder)
+        TabDivider(colors.border)
         TrackingTab(
             "🎯", "Daily Goal", mood.goalLabel,
-            if (dailyGoalOnTrack) WarmGoalBlue else WarmError, mood.goalSub, textPrimary, textSecondary
+            if (dailyGoalOnTrack) colors.goal else colors.error, mood.goalSub, textPrimary, textSecondary
         )
-        TabDivider(cardBorder)
+        TabDivider(colors.border)
         TrackingTab(
             "🛡️", "Focus Shield", focusShield.status.label,
             focusShield.status.color, focusShield.status.tabSubtitle, textPrimary, textSecondary
@@ -820,11 +755,11 @@ private fun InsightBar(
     mood: DashboardMood,
     todayReels: Int,
     yesterdayReels: Int,
-    dark: Boolean,
 ) {
-    val bg = if (dark) WarmInsightBgDark else WarmInsightBg
-    val accent = if (dark) WarmInsightAccentDark else WarmInsightAccent
-    val bodyColor = if (dark) WarmText else WarmLightText
+    val colors = AppTheme.colors
+    val bg = colors.insightBg
+    val accent = colors.insightAccent
+    val bodyColor = colors.textPrimary
 
     val comparison = if (yesterdayReels > 0) {
         val diff = todayReels - yesterdayReels
@@ -880,13 +815,11 @@ private fun FocusPlan(
     minuteLimit: Int,
     screenTimeToday: Int,
     onEditPlan: () -> Unit,
-    surface: Color,
-    cardBorder: Color,
-    trackBg: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val trackBg = colors.surfaceAlt
     val reelOver = reelLimit in 1..totalReels
     val timeOver = minuteLimit in 1..screenTimeToday
     Column(
@@ -894,9 +827,13 @@ private fun FocusPlan(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(bottom = 12.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier)
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = !colors.isDark,
+                borderColor = colors.border,
+                shadow = if (colors.isDark) 0.dp else 3.dp,
+            )
             .padding(16.dp)
     ) {
         Row(
@@ -911,8 +848,8 @@ private fun FocusPlan(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Text("Edit Plan", color = WarmAccent, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("›", color = WarmAccent, fontSize = 16.sp)
+                Text("Edit Plan", color = colors.accent, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("›", color = colors.accent, fontSize = 16.sp)
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -955,7 +892,7 @@ private fun FocusPlanRow(
             Text(subtitle, color = textSecondary, fontSize = 12.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(valueStart, fontWeight = FontWeight.SemiBold, color = if (over) WarmError else WarmAccent, fontSize = 14.sp)
+            Text(valueStart, fontWeight = FontWeight.SemiBold, color = if (over) AppTheme.colors.error else AppTheme.colors.accent, fontSize = 14.sp)
             Text(valueEnd, color = textSecondary, fontSize = 14.sp)
             Spacer(Modifier.width(6.dp))
             Text("›", color = textSecondary, fontSize = 16.sp)
@@ -967,20 +904,20 @@ private fun FocusPlanRow(
 @Composable
 private fun ReminderCard(
     mood: DashboardMood,
-    surface: Color,
-    cardBorder: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    dark: Boolean,
 ) {
+    val colors = AppTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(bottom = 12.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .then(if (!dark) Modifier.border(1.dp, cardBorder, RoundedCornerShape(12.dp)) else Modifier),
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = !colors.isDark,
+                borderColor = colors.border,
+                shadow = if (colors.isDark) 0.dp else 3.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f).padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 4.dp)) {
@@ -989,7 +926,7 @@ private fun ReminderCard(
                 Text(mood.reminderTitle, color = mood.accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(6.dp))
-            Text(mood.reminderText, color = textSecondary, fontSize = 13.sp, lineHeight = 19.sp)
+            Text(mood.reminderText, color = colors.textSecondary, fontSize = 13.sp, lineHeight = 19.sp)
         }
         // Edge-to-edge character: the short reminder card means only a tiny scale, so the
         // whole brain stays visible while still reaching the card's top and bottom.
@@ -1008,27 +945,25 @@ private fun ReminderCard(
 @Composable
 private fun UsageAccessBanner(
     context: android.content.Context,
-    trackBg: Color,
-    textPrimary: Color,
-    textSecondary: Color,
 ) {
+    val colors = AppTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .padding(bottom = 8.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(trackBg)
+            .background(colors.surfaceAlt)
             .clickable { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Grant Usage Access", fontWeight = FontWeight.Medium, color = textPrimary, fontSize = 14.sp)
-            Text("Required to show screen time", color = textSecondary, fontSize = 12.sp)
+            Text("Grant Usage Access", fontWeight = FontWeight.Medium, color = colors.textPrimary, fontSize = 14.sp)
+            Text("Required to show screen time", color = colors.textSecondary, fontSize = 12.sp)
         }
-        Text("→", color = WarmAccent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("→", color = colors.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
 

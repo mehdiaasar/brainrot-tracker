@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brainrottracker.data.model.Platform
+import com.example.brainrottracker.theme.AppTheme
 import com.example.brainrottracker.theme.ChartInstagram
 import com.example.brainrottracker.theme.ChartSnapchat
 import com.example.brainrottracker.theme.ChartTikTokDark
@@ -53,21 +54,6 @@ import com.example.brainrottracker.theme.StatsExcellent
 import com.example.brainrottracker.theme.StatsCritical
 import com.example.brainrottracker.theme.StatsWorstBgDark
 import com.example.brainrottracker.theme.StatsWorstBgLight
-import com.example.brainrottracker.theme.WarmBackground
-import com.example.brainrottracker.theme.WarmBorder
-import com.example.brainrottracker.theme.WarmGrantedGreen
-import com.example.brainrottracker.theme.WarmError
-import com.example.brainrottracker.theme.WarmInsightAccent
-import com.example.brainrottracker.theme.WarmAccent
-import com.example.brainrottracker.theme.WarmLightBackground
-import com.example.brainrottracker.theme.WarmLightBorder
-import com.example.brainrottracker.theme.WarmLightSurface
-import com.example.brainrottracker.theme.WarmLightText
-import com.example.brainrottracker.theme.WarmLightTextSecondary
-import com.example.brainrottracker.theme.WarmSurface
-import com.example.brainrottracker.theme.WarmText
-import com.example.brainrottracker.theme.WarmTextSecondary
-import com.example.brainrottracker.theme.rememberIsDark
 import com.example.brainrottracker.ui.components.MoodCharacter
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -81,13 +67,7 @@ fun StatsScreen(
     viewModel: StatsViewModel = viewModel(),
     onBackClick: () -> Unit = {}
 ) {
-    val dark = rememberIsDark()
-    val bg = if (dark) WarmBackground else WarmLightBackground
-    val surface = if (dark) WarmSurface else WarmLightSurface
-    val cardBorder = if (dark) WarmBorder else WarmLightBorder
-    val textPrimary = if (dark) WarmText else WarmLightText
-    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
-    val track = if (dark) WarmBorder else WarmLightBorder
+    val colors = AppTheme.colors
 
     val stats by viewModel.weeklyStats.collectAsState()
     val mood = StatsMood.fromScore(stats.productivityScore)
@@ -95,42 +75,19 @@ fun StatsScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(bg),
+            .background(colors.background),
     ) {
-        item {
-            Header(
-                onBackClick = onBackClick,
-                surface = surface, cardBorder = cardBorder,
-                textPrimary = textPrimary, textSecondary = textSecondary, dark = dark
-            )
-        }
+        item { Header(onBackClick = onBackClick) }
 
-        item {
-            HeroCard(
-                score = stats.productivityScore, mood = mood,
-                track = track, textPrimary = textPrimary, textSecondary = textSecondary, dark = dark
-            )
-        }
+        item { HeroCard(score = stats.productivityScore, mood = mood) }
 
-        item {
-            ScreenTimeCard(
-                minutesByDate = stats.minutesByDate, mood = mood,
-                surface = surface, cardBorder = cardBorder, track = track,
-                textPrimary = textPrimary, textSecondary = textSecondary, dark = dark
-            )
-        }
+        item { ScreenTimeCard(minutesByDate = stats.minutesByDate, mood = mood) }
 
-        item {
-            SummaryRow(stats, mood, surface, cardBorder, textPrimary, textSecondary, dark)
-        }
+        item { SummaryRow(stats) }
 
-        item {
-            BestWorstRow(stats, surface, cardBorder, textPrimary, textSecondary, dark)
-        }
+        item { BestWorstRow(stats) }
 
-        item {
-            FooterCard(mood, textPrimary, textSecondary, dark)
-        }
+        item { FooterCard(mood) }
 
         item { Spacer(Modifier.height(12.dp)) }
     }
@@ -141,9 +98,10 @@ fun StatsScreen(
 @Composable
 private fun Header(
     onBackClick: () -> Unit,
-    surface: Color, cardBorder: Color,
-    textPrimary: Color, textSecondary: Color, dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
     // Title row and subtitle are separate so the pill button aligns with just the title line.
     Column(
         modifier = Modifier
@@ -185,8 +143,12 @@ private fun Header(
 @Composable
 private fun HeroCard(
     score: Int, mood: StatsMood,
-    track: Color, textPrimary: Color, textSecondary: Color, dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val track = colors.border
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val dark = colors.isDark
     val cardBg = if (dark) mood.heroBgDark else mood.heroBgLight
     Row(
         modifier = Modifier
@@ -259,9 +221,14 @@ private fun HeroCard(
 @Composable
 private fun ScreenTimeCard(
     minutesByDate: Map<String, Map<Platform, Int>>, mood: StatsMood,
-    surface: Color, cardBorder: Color, track: Color,
-    textPrimary: Color, textSecondary: Color, dark: Boolean,
 ) {
+    val colors = AppTheme.colors
+    val surface = colors.surface
+    val cardBorder = colors.border
+    val track = colors.border
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val dark = colors.isDark
     val tiktok = if (dark) ChartTikTokDark else ChartTikTokLight
     Column(
         modifier = Modifier
@@ -384,25 +351,23 @@ private fun BarChart(
 /* ───────────────────────── Summary cards ───────────────────────── */
 
 @Composable
-private fun SummaryRow(
-    stats: WeeklyStats, mood: StatsMood,
-    surface: Color, cardBorder: Color, textPrimary: Color, textSecondary: Color, dark: Boolean,
-) {
+private fun SummaryRow(stats: WeeklyStats) {
+    val colors = AppTheme.colors
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         SummaryCard(
-            "▶", WarmAccent, "Total Videos", "${stats.totalReels}", stats.reelsDeltaPct,
-            Modifier.weight(1f), surface, cardBorder, textPrimary, textSecondary, dark
+            "▶", colors.accent, "Total Videos", "${stats.totalReels}", stats.reelsDeltaPct,
+            Modifier.weight(1f)
         )
         SummaryCard(
-            "🕐", WarmInsightAccent, "Total Time", fmtHm(stats.totalMinutes), stats.timeDeltaPct,
-            Modifier.weight(1f), surface, cardBorder, textPrimary, textSecondary, dark
+            "🕐", colors.settingsPurple, "Total Time", fmtHm(stats.totalMinutes), stats.timeDeltaPct,
+            Modifier.weight(1f)
         )
         SummaryCard(
-            "◎", WarmGrantedGreen, "Daily Average", fmtHm(stats.dailyAverageMinutes), stats.avgDeltaPct,
-            Modifier.weight(1f), surface, cardBorder, textPrimary, textSecondary, dark
+            "◎", colors.success, "Daily Average", fmtHm(stats.dailyAverageMinutes), stats.avgDeltaPct,
+            Modifier.weight(1f)
         )
     }
 }
@@ -410,9 +375,14 @@ private fun SummaryRow(
 @Composable
 private fun SummaryCard(
     icon: String, iconTint: Color, label: String, value: String, deltaPct: Int?,
-    modifier: Modifier, surface: Color, cardBorder: Color,
-    textPrimary: Color, textSecondary: Color, dark: Boolean,
+    modifier: Modifier,
 ) {
+    val colors = AppTheme.colors
+    val surface = colors.surface
+    val cardBorder = colors.border
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val dark = colors.isDark
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
@@ -449,31 +419,27 @@ private fun SummaryCard(
 /* ───────────────────────── Best / Worst day ───────────────────────── */
 
 @Composable
-private fun BestWorstRow(
-    stats: WeeklyStats,
-    surface: Color, cardBorder: Color, textPrimary: Color, textSecondary: Color, dark: Boolean,
-) {
+private fun BestWorstRow(stats: WeeklyStats) {
+    val colors = AppTheme.colors
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         DayCard(
-            badge = "BEST DAY", badgeColor = WarmGrantedGreen,
+            badge = "BEST DAY", badgeColor = colors.success,
             bgLight = StatsBestBgLight, bgDark = StatsBestBgDark,
             dayName = dayName(stats.bestDay?.date),
             videos = stats.bestDay?.getTotalReels() ?: 0, minutes = stats.bestDayMinutes,
             charRes = com.example.brainrottracker.R.drawable.stats_best,
-            modifier = Modifier.weight(1f),
-            cardBorder = cardBorder, textPrimary = textPrimary, textSecondary = textSecondary, dark = dark
+            modifier = Modifier.weight(1f)
         )
         DayCard(
-            badge = "WORST DAY", badgeColor = WarmError,
+            badge = "WORST DAY", badgeColor = colors.error,
             bgLight = StatsWorstBgLight, bgDark = StatsWorstBgDark,
             dayName = dayName(stats.worstDay?.date),
             videos = stats.worstDay?.getTotalReels() ?: 0, minutes = stats.worstDayMinutes,
             charRes = com.example.brainrottracker.R.drawable.stats_worst,
-            modifier = Modifier.weight(1f),
-            cardBorder = cardBorder, textPrimary = textPrimary, textSecondary = textSecondary, dark = dark
+            modifier = Modifier.weight(1f)
         )
     }
 }
@@ -482,8 +448,12 @@ private fun BestWorstRow(
 private fun DayCard(
     badge: String, badgeColor: Color, bgLight: Color, bgDark: Color,
     dayName: String, videos: Int, minutes: Int, charRes: Int,
-    modifier: Modifier, cardBorder: Color, textPrimary: Color, textSecondary: Color, dark: Boolean,
+    modifier: Modifier,
 ) {
+    val colors = AppTheme.colors
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
+    val dark = colors.isDark
     // Layered so the brain can be large in the bottom-right corner (bleeding past the text)
     // without colliding with the badge — the text is width-constrained to the left.
     Box(
@@ -516,7 +486,10 @@ private fun DayCard(
 /* ───────────────────────── Footer card ───────────────────────── */
 
 @Composable
-private fun FooterCard(mood: StatsMood, textPrimary: Color, textSecondary: Color, dark: Boolean) {
+private fun FooterCard(mood: StatsMood) {
+    val colors = AppTheme.colors
+    val textSecondary = colors.textSecondary
+    val dark = colors.isDark
     val cardBg = if (dark) mood.footerBgDark else mood.footerBgLight
     Row(
         modifier = Modifier

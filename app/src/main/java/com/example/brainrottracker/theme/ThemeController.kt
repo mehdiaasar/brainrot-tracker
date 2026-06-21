@@ -3,6 +3,7 @@ package com.example.brainrottracker.theme
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.brainrottracker.data.local.prefs.Prefs
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,15 +23,15 @@ object ThemeController {
     private var prefs: SharedPreferences? = null
 
     fun init(context: Context) {
-        val p = context.getSharedPreferences("brainrot_prefs", Context.MODE_PRIVATE)
+        val p = context.getSharedPreferences(Prefs.FILE, Context.MODE_PRIVATE)
         prefs = p
-        mode = runCatching { Mode.valueOf(p.getString("theme_mode", Mode.SYSTEM.name)!!) }
+        mode = runCatching { Mode.valueOf(p.getString(Prefs.THEME_MODE, Mode.SYSTEM.name)!!) }
             .getOrDefault(Mode.SYSTEM)
     }
 
     fun selectMode(newMode: Mode) {
         mode = newMode
-        prefs?.edit()?.putString("theme_mode", newMode.name)?.apply()
+        prefs?.edit()?.putString(Prefs.THEME_MODE, newMode.name)?.apply()
     }
 }
 

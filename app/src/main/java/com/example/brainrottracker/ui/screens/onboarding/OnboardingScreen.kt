@@ -49,22 +49,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.example.brainrottracker.data.local.prefs.Prefs
 import com.example.brainrottracker.data.util.ScreenTimeHelper
-import com.example.brainrottracker.theme.rememberIsDark
-import com.example.brainrottracker.theme.WarmAccent
-import com.example.brainrottracker.theme.WarmBackground
-import com.example.brainrottracker.theme.WarmBorder
-import com.example.brainrottracker.theme.WarmGrantedGreen
-import com.example.brainrottracker.theme.WarmLightBackground
-import com.example.brainrottracker.theme.WarmLightBorder
-import com.example.brainrottracker.theme.WarmLightInner
-import com.example.brainrottracker.theme.WarmLightSurface
-import com.example.brainrottracker.theme.WarmLightText
-import com.example.brainrottracker.theme.WarmLightTextSecondary
-import com.example.brainrottracker.theme.WarmStepDim
-import com.example.brainrottracker.theme.WarmSurface
-import com.example.brainrottracker.theme.WarmText
-import com.example.brainrottracker.theme.WarmTextSecondary
+import com.example.brainrottracker.theme.AppTheme
+import com.example.brainrottracker.ui.components.appCard
 
 @Composable
 fun OnboardingScreen(
@@ -74,13 +62,11 @@ fun OnboardingScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    val dark = rememberIsDark()
-    val bg = if (dark) WarmBackground else WarmLightBackground
-    val surface = if (dark) WarmSurface else WarmLightSurface
-    val cardBorder = if (dark) WarmBorder else WarmLightBorder
-    val stepDim = if (dark) WarmStepDim else WarmLightInner
-    val textPrimary = if (dark) WarmText else WarmLightText
-    val textSecondary = if (dark) WarmTextSecondary else WarmLightTextSecondary
+    val colors = AppTheme.colors
+    val bg = colors.background
+    val stepDim = colors.surfaceAlt
+    val textPrimary = colors.textPrimary
+    val textSecondary = colors.textSecondary
 
     var hasAccessibility by remember { mutableStateOf(false) }
     var hasOverlay by remember { mutableStateOf(false) }
@@ -119,7 +105,7 @@ fun OnboardingScreen(
 
     // Play policy: prominent disclosure + consent BEFORE sending the user to enable
     // the accessibility service.
-    val sharedPrefs = remember { context.getSharedPreferences("brainrot_prefs", Context.MODE_PRIVATE) }
+    val sharedPrefs = remember { context.getSharedPreferences(Prefs.FILE, Context.MODE_PRIVATE) }
     var showAccessibilityDisclosure by remember { mutableStateOf(false) }
 
     if (showAccessibilityDisclosure) {
@@ -128,17 +114,16 @@ fun OnboardingScreen(
             title = { Text("How Accessibility is used") },
             text = {
                 Text(
-                    "BrainRot Tracker uses Android's Accessibility API to read screen content " +
+                    "LoopOut uses Android's Accessibility API to read screen content " +
                         "from Instagram, YouTube, TikTok and Snapchat only, in order to count the " +
                         "short videos you watch.\n\n" +
-                        "This data is processed and stored on your device. If you later sign in and " +
-                        "enable cloud backup, only your daily totals are uploaded to your private " +
-                        "account. Nothing is ever shared with third parties."
+                        "This data is processed and stored only on your device — it never leaves " +
+                        "your phone and is never shared with third parties."
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    sharedPrefs.edit().putBoolean("accessibility_disclosure_accepted", true).apply()
+                    sharedPrefs.edit().putBoolean(Prefs.ACCESSIBILITY_DISCLOSURE_ACCEPTED, true).apply()
                     showAccessibilityDisclosure = false
                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }) { Text("Agree & Continue") }
@@ -169,7 +154,7 @@ fun OnboardingScreen(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "BrainRot Tracker",
+                text = "LoopOut",
                 fontFamily = FontFamily.Serif,
                 fontWeight = FontWeight.Normal,
                 fontSize = 28.sp,
@@ -193,7 +178,7 @@ fun OnboardingScreen(
                             .weight(1f)
                             .height(6.dp)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(if (i < grantedCount) WarmGrantedGreen else stepDim)
+                            .background(if (i < grantedCount) colors.success else stepDim)
                     )
                 }
             }
@@ -227,15 +212,10 @@ fun OnboardingScreen(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PermissionCard(
                 title = "Accessibility Access",
-                description = "Allows BrainRot Tracker to detect active apps and screen usage.",
+                description = "Allows LoopOut to detect active apps and screen usage.",
                 isGranted = hasAccessibility,
-                surface = surface,
-                cardBorder = cardBorder,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                btnBg = bg,
                 onOpenSettings = {
-                    if (sharedPrefs.getBoolean("accessibility_disclosure_accepted", false)) {
+                    if (sharedPrefs.getBoolean(Prefs.ACCESSIBILITY_DISCLOSURE_ACCEPTED, false)) {
                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     } else {
                         showAccessibilityDisclosure = true
@@ -244,13 +224,8 @@ fun OnboardingScreen(
             )
             PermissionCard(
                 title = "Overlay Permission",
-                description = "Lets BrainRot Tracker show the floating counter over other apps.",
+                description = "Lets LoopOut show the floating counter over other apps.",
                 isGranted = hasOverlay,
-                surface = surface,
-                cardBorder = cardBorder,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                btnBg = bg,
                 onOpenSettings = {
                     val intent = Intent(
                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -263,11 +238,6 @@ fun OnboardingScreen(
                 title = "Notification Access",
                 description = "Enables daily focus summaries and gentle nudges.",
                 isGranted = hasNotifications,
-                surface = surface,
-                cardBorder = cardBorder,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                btnBg = bg,
                 onOpenSettings = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         if (!notificationRequestAttempted) {
@@ -290,11 +260,6 @@ fun OnboardingScreen(
                 title = "Usage Access",
                 description = "Fetches accurate screen time directly from the system — the same data shown in Digital Wellbeing.",
                 isGranted = hasUsageStats,
-                surface = surface,
-                cardBorder = cardBorder,
-                textPrimary = textPrimary,
-                textSecondary = textSecondary,
-                btnBg = bg,
                 onOpenSettings = {
                     context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                 }
@@ -313,7 +278,7 @@ fun OnboardingScreen(
                 .height(40.dp),
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (allGranted) WarmAccent else stepDim,
+                containerColor = if (allGranted) colors.accent else stepDim,
                 contentColor = if (allGranted) Color.White else textPrimary
             )
         ) {
@@ -343,19 +308,18 @@ private fun PermissionCard(
     title: String,
     description: String,
     isGranted: Boolean,
-    surface: Color,
-    cardBorder: Color,
-    textPrimary: Color,
-    textSecondary: Color,
-    btnBg: Color,
     onOpenSettings: () -> Unit
 ) {
+    val colors = AppTheme.colors
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(surface)
-            .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
+            .appCard(
+                color = colors.surface,
+                shape = RoundedCornerShape(12.dp),
+                border = true,
+                borderColor = colors.border,
+            )
             .padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -370,12 +334,12 @@ private fun PermissionCard(
                 fontWeight = FontWeight.Medium,
                 fontSize = 16.sp,
                 lineHeight = 22.sp,
-                color = textPrimary,
+                color = colors.textPrimary,
                 // Take the remaining width so the badge keeps its full size and never gets
                 // squeezed into a two-line "GRANTE D" on narrower screens.
                 modifier = Modifier.weight(1f, fill = false).padding(end = 12.dp)
             )
-            StatusBadge(isGranted = isGranted, cardBorder = cardBorder, textSecondary = textSecondary)
+            StatusBadge(isGranted = isGranted)
         }
 
         // Description
@@ -383,7 +347,7 @@ private fun PermissionCard(
             text = description,
             fontSize = 14.sp,
             lineHeight = 22.sp,
-            color = textSecondary
+            color = colors.textSecondary
         )
 
         // Open Settings button
@@ -393,10 +357,10 @@ private fun PermissionCard(
                 .fillMaxWidth()
                 .height(40.dp),
             shape = RoundedCornerShape(8.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder),
+            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
             colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = btnBg,
-                contentColor = textPrimary
+                containerColor = colors.background,
+                contentColor = colors.textPrimary
             )
         ) {
             Text(
@@ -409,12 +373,13 @@ private fun PermissionCard(
 }
 
 @Composable
-private fun StatusBadge(isGranted: Boolean, cardBorder: Color, textSecondary: Color) {
+private fun StatusBadge(isGranted: Boolean) {
+    val colors = AppTheme.colors
     if (isGranted) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50.dp))
-                .background(WarmGrantedGreen)
+                .background(colors.success)
                 .padding(horizontal = 12.dp, vertical = 5.dp)
         ) {
             Text(
@@ -431,7 +396,7 @@ private fun StatusBadge(isGranted: Boolean, cardBorder: Color, textSecondary: Co
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50.dp))
-                .border(1.dp, cardBorder, RoundedCornerShape(50.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(50.dp))
                 .padding(horizontal = 12.dp, vertical = 5.dp)
         ) {
             Text(
@@ -439,7 +404,7 @@ private fun StatusBadge(isGranted: Boolean, cardBorder: Color, textSecondary: Co
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 1.sp,
-                color = textSecondary,
+                color = colors.textSecondary,
                 maxLines = 1,
                 softWrap = false
             )

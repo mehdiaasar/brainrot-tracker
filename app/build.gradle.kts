@@ -24,8 +24,8 @@ android {
     namespace = "com.example.brainrottracker"
     compileSdk = 36
     defaultConfig {
-        // TODO: confirm final id before first Play upload — it is immutable once published
-        applicationId = "io.github.aasarmehdi.brainrot"
+        // Immutable once published to Play. Confirmed as the LoopOut package name.
+        applicationId = "io.github.aasarmehdi.loopout"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
