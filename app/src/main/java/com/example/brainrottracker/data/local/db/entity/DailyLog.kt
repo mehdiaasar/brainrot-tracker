@@ -12,15 +12,17 @@ data class DailyLog(
     val youtubeShorts: Int = 0,
     val tiktokVideos: Int = 0,
     val snapchatSpotlights: Int = 0,
+    val facebookReels: Int = 0,
     val brainHealthScore: Int = 100
 ) {
     fun getTotalReels(): Int =
-        instagramReels + youtubeShorts + tiktokVideos + snapchatSpotlights
+        instagramReels + youtubeShorts + tiktokVideos + snapchatSpotlights + facebookReels
 
     fun getReelsForPlatform(platform: Platform): Int = when (platform) {
         Platform.INSTAGRAM -> instagramReels
         Platform.YOUTUBE -> youtubeShorts
         Platform.TIKTOK -> tiktokVideos
         Platform.SNAPCHAT -> snapchatSpotlights
+        Platform.FACEBOOK -> facebookReels
     }
 }

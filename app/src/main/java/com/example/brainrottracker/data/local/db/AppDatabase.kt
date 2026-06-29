@@ -13,7 +13,7 @@ import com.example.brainrottracker.data.local.db.entity.UserLimits
 
 @Database(
     entities = [DailyLog::class, UserLimits::class, StreakRecord::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

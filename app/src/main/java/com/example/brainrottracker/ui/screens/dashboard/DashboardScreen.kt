@@ -420,7 +420,10 @@ private fun StatsCluster(
             }
         }
 
-        // Full-width streak bar — collapses (height + fade) as the inline one appears.
+        // Full-width streak bar — collapses (height + fade) as the inline one appears. The bar
+        // animates its OWN height rather than living inside a clipping box: appCard already clips
+        // the bar's content to the rounded shape and draws its shadow outside the bounds (clip =
+        // false), so the shadow/corners render identically to every other card at any height.
         val barAlpha = (1f - fraction * 1.5f).coerceIn(0f, 1f)
         if (barAlpha > 0.01f) {
             Box(
@@ -428,19 +431,14 @@ private fun StatsCluster(
                     .fillMaxWidth()
                     .height(lerp(12.dp, 0.dp, fraction))
             )
-            Box(
+            StreakBar(
+                streak = streak,
+                onClick = onViewStreaks,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(lerp(74.dp, 0.dp, (fraction * 1.5f).coerceAtMost(1f)))
-                    .clipToBounds()
                     .graphicsLayer { alpha = barAlpha }
-            ) {
-                StreakBar(
-                    streak = streak,
-                    onClick = onViewStreaks,
-                    modifier = Modifier.fillMaxWidth().height(74.dp)
-                )
-            }
+            )
         }
     }
 }
@@ -466,7 +464,8 @@ private fun ReelsCard(
     val usedPlatforms = Platform.entries.mapNotNull { p ->
         val count = todayLog?.getReelsForPlatform(p) ?: 0
         if (count > 0) p to count else null
-    }
+    }.sortedByDescending { it.second } // most-used first so every used app (incl. Snapchat, last in
+                                       // the enum) is shown rather than dropped by a fixed top-N cut
     Column(
         modifier = modifier
             .appCard(
@@ -514,7 +513,7 @@ private fun ReelsCard(
             Text("No reels yet 🧘", color = textSecondary, fontSize = 12.sp)
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                usedPlatforms.take(2).forEach { (platform, count) ->
+                usedPlatforms.forEach { (platform, count) ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PlatformLogo(platform = platform, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(4.dp))

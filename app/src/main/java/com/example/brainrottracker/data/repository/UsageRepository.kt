@@ -41,6 +41,7 @@ class UsageRepository(private val database: AppDatabase) {
             Platform.YOUTUBE -> dailyLogDao.incrementYoutubeShorts(date)
             Platform.TIKTOK -> dailyLogDao.incrementTiktokVideos(date)
             Platform.SNAPCHAT -> dailyLogDao.incrementSnapchatSpotlights(date)
+            Platform.FACEBOOK -> dailyLogDao.incrementFacebookReels(date)
         }
     }
 

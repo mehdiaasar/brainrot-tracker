@@ -1,9 +1,8 @@
 package com.example.brainrottracker.service
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -51,46 +50,63 @@ class ReelCounterService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // Heartbeat that runs while a tracked app is in the foreground. It keeps the HUD visible
-    // while a reel feed is open, re-evaluates blocking (so an expired snooze re-blocks within
-    // ~1 s), and detects when the user leaves to an untracked app — the accessibility service
-    // gets no events from other apps, so we poll the active window instead. Leaving a tracked
-    // app ends its "foreground session" (used by REMIND-mode blocking dismissals).
+    // The floating HUD/blocking overlay, drawn directly from this always-alive accessibility service
+    // (no foreground service — see OverlayController). Created in onServiceConnected, torn down in
+    // onDestroy.
+    private var overlay: OverlayController? = null
+
+    // Heartbeat that runs while a tracked app is in the foreground. It keeps the HUD visible while a
+    // reel feed is open, re-evaluates blocking (so an expired snooze re-blocks within ~1 s), and —
+    // critically — tracks when the user leaves the reel page. The pill is tied to the reel page, not
+    // to the app process: any poll where the foreground isn't one of our tracked apps means we're not
+    // on a reel page, so the pill is hidden right away.
+    //
+    // The service is filtered to the tracked packages, so on Home / another app / the lock screen
+    // `rootInActiveWindow` returns null (the window can't be introspected). We treat null the same as
+    // an untracked app — "away" — and hide immediately. To avoid ending the session on a transient
+    // null while still scrolling, the full teardown waits for a couple of consecutive away polls; a
+    // real event in the meantime re-shows the pill via keepBubbleVisible().
     private val HEARTBEAT_MS = 1000L
+    private val AWAY_POLLS_BEFORE_TEARDOWN = 2
     private var heartbeatActive = false
     private var lastForegroundTracked: String? = null
+    private var consecutiveAwayPolls = 0
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
             val fg = rootInActiveWindow?.packageName?.toString()
             val fgPlatform = fg?.let { Platform.fromPackageName(it) }
 
-            if (fg != null && fgPlatform == null) {
-                // Left all tracked apps: end the foreground session, re-arm the REMIND prompt for
-                // the next scroll session, and stop polling.
-                lastForegroundTracked?.let { endTrackedSession(it) }
-                FloatingCounterService.instance?.onAllTrackedAppsLeft()
-                lastForegroundTracked = null
-                heartbeatActive = false
-                // Tear the overlay service down entirely so it stops counting as background
-                // activity. onDestroy removes any lingering overlays. It restarts on demand the
-                // next time a tracked app is foregrounded.
-                stopOverlayService()
+            if (fg == null || fgPlatform == null) {
+                // Not on a tracked reel app (untracked app, Home, or a null/locked window). The pill
+                // belongs to the reel page only, so hide it immediately.
+                overlay?.hide()
+                consecutiveAwayPolls++
+                if (consecutiveAwayPolls >= AWAY_POLLS_BEFORE_TEARDOWN) {
+                    // Confirmed away: end the foreground session, re-arm the REMIND prompt, and stop
+                    // polling. The pill stays hidden; it re-shows the next time a tracked reel page is
+                    // foregrounded (an accessibility event restarts the heartbeat).
+                    lastForegroundTracked?.let { endTrackedSession(it) }
+                    overlay?.onAllTrackedAppsLeft()
+                    lastForegroundTracked = null
+                    heartbeatActive = false
+                    return
+                }
+                mainHandler.postDelayed(this, HEARTBEAT_MS)
                 return
             }
 
-            if (fg != null && fgPlatform != null) {
-                if (fg != lastForegroundTracked) {
-                    lastForegroundTracked?.let { endTrackedSession(it) }
-                    lastForegroundTracked = fg
-                }
-                if (hasReelPager[fg] == true || fgPlatform == Platform.TIKTOK) {
-                    FloatingCounterService.instance?.show()
-                } else {
-                    FloatingCounterService.instance?.hide()
-                }
-                evaluateBlocking(fgPlatform, fg)
+            // On a tracked app — reset the away streak.
+            consecutiveAwayPolls = 0
+            if (fg != lastForegroundTracked) {
+                lastForegroundTracked?.let { endTrackedSession(it) }
+                lastForegroundTracked = fg
             }
-            // fg == null means the window couldn't be read — keep polling.
+            if (hasReelPager[fg] == true || fgPlatform == Platform.TIKTOK) {
+                overlay?.show()
+            } else {
+                overlay?.hide()
+            }
+            evaluateBlocking(fgPlatform, fg)
             mainHandler.postDelayed(this, HEARTBEAT_MS)
         }
     }
@@ -105,6 +121,10 @@ class ReelCounterService : AccessibilityService() {
 
     // Per-package: whether we've confirmed a reel pager exists on the current screen
     private val hasReelPager = mutableMapOf<String, Boolean>()
+
+    // Whether FLAG_INCLUDE_NOT_IMPORTANT_VIEWS is currently enabled (toggled per foreground app;
+    // needed for Snapchat Spotlight, harmful to YouTube — see setIncludeNotImportantViews).
+    private var includeNotImportantViewsOn = false
 
     // ── Identity-based counting (YouTube + Instagram) ──────────────────────────
     // Each reel has a stable identity. We count it once, only after it has been the active reel
@@ -141,6 +161,10 @@ class ReelCounterService : AccessibilityService() {
         private const val TAG = "ReelCounter"
         private const val MAX_TREE_DEPTH = 12
 
+        // AccessibilityEvent.CONTENT_CHANGE_TYPE_ENABLED (API 34+), inlined so the bit check
+        // compiles/works on all API levels. Snapchat sets this when a new Spotlight video activates.
+        private const val CONTENT_CHANGE_TYPE_ENABLED = 0x00001000 // 4096
+
         var isRunning = false
             private set
         var instance: ReelCounterService? = null
@@ -162,6 +186,11 @@ class ReelCounterService : AccessibilityService() {
         notificationHelper = NotificationHelper(applicationContext)
         notificationHelper.createChannels()
 
+        // Draw the HUD/blocking overlay directly from this (always-alive) accessibility service —
+        // no foreground service, so there are no background FGS starts for aggressive OEMs (MIUI/
+        // HyperOS) to block or penalize. Visibility is driven by the heartbeat and reel detection.
+        overlay = OverlayController(this)
+
         serviceScope.launch {
             val todayLog = repository.getTodayLogSnapshot()
             todayLog?.let { log ->
@@ -181,10 +210,6 @@ class ReelCounterService : AccessibilityService() {
             }
         }
 
-        // NOTE: the overlay service is intentionally NOT started here. It is launched on demand
-        // when a tracked app comes to the foreground (see onAccessibilityEvent) and stopped when
-        // the user leaves all tracked apps (see heartbeatRunnable). This keeps the foreground
-        // service — and the app's "background activity" footprint — alive only while it's needed.
     }
 
     override fun onInterrupt() {}
@@ -196,36 +221,8 @@ class ReelCounterService : AccessibilityService() {
         heartbeatActive = false
         mainHandler.removeCallbacks(heartbeatRunnable)
         serviceScope.cancel()
-        stopOverlayService()
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Overlay service lifecycle — started on demand, only while a tracked app is
-    // in the foreground, so the foreground service isn't a 24/7 background hog.
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private fun startOverlayService() {
-        if (FloatingCounterService.instance != null) return // already running
-        try {
-            val intent = Intent(this, FloatingCounterService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
-        } catch (e: Exception) {
-            // Android 12+ can reject background FGS starts; detection still works without the
-            // overlay, and the next tracked-app event will retry.
-            Log.w(TAG, "Could not start overlay service: ${e.message}")
-        }
-    }
-
-    private fun stopOverlayService() {
-        try {
-            stopService(Intent(this, FloatingCounterService::class.java))
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not stop overlay service: ${e.message}")
-        }
+        overlay?.destroy()
+        overlay = null
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -238,13 +235,15 @@ class ReelCounterService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
         val platform = Platform.fromPackageName(pkg) ?: return
 
-        // We're inside a tracked app: make sure the overlay service is up. Cheap no-op once running.
-        startOverlayService()
-
         when (event.eventType) {
 
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 Log.d(TAG, "WINDOW_STATE: pkg=$pkg class=${event.className}")
+                // Snapchat's Spotlight feed only exposes its container/feed nodes when
+                // flagIncludeNotImportantViews is on, but that flag breaks YouTube Shorts detection
+                // (it changes the window rootInActiveWindow returns). So enable it ONLY while
+                // Snapchat is foreground and strip it for every other tracked app.
+                setIncludeNotImportantViews(pkg == "com.snapchat.android")
                 lastInspectionMs.remove(pkg) // Clear cooldown so the new screen is inspected immediately!
                 // Do NOT clear state variables here. This prevents resetting signature detection
                 // on minor state transitions (like opening comments or showing overlays).
@@ -256,7 +255,11 @@ class ReelCounterService : AccessibilityService() {
                     lastForegroundTracked?.let { endTrackedSession(it) }
                     lastForegroundTracked = pkg
                 }
-                evaluateBlocking(platform, pkg)
+                // Don't block on foreground-entry alone: `hasReelPager[pkg]` can be stale-true here
+                // (e.g. backgrounded straight from Shorts, reopened to the home feed), which would
+                // flash the scrim on a non-feed screen. The heartbeat below re-evaluates within ~1s
+                // with an up-to-date flag, and content inspection re-blocks as soon as a real reel
+                // feed is detected.
                 startHeartbeat()
             }
 
@@ -268,6 +271,18 @@ class ReelCounterService : AccessibilityService() {
             }
 
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                // Snapchat Spotlight has no scroll events, no readable pager index, and an identical
+                // view tree per video (the feed is a SurfaceView). The one per-swipe signal it emits
+                // is a CONTENT_CHANGE_TYPE_ENABLED change when the next video's content activates.
+                // Arm a dwell on that bit while we're confirmed inside Spotlight: a video skipped
+                // before DWELL_MS is never counted, matching YouTube/Instagram.
+                if (platform == Platform.SNAPCHAT &&
+                    (event.contentChangeTypes and CONTENT_CHANGE_TYPE_ENABLED) != 0 &&
+                    hasReelPager[pkg] == true
+                ) {
+                    armSnapchatDwell(platform, pkg)
+                }
+
                 val isSubtree = (event.contentChangeTypes and
                         AccessibilityEvent.CONTENT_CHANGE_TYPE_SUBTREE) != 0
                 if (isSubtree) {
@@ -384,7 +399,9 @@ class ReelCounterService : AccessibilityService() {
             when (pkg) {
                 "com.google.android.youtube" -> evaluateReelSession(pkg, platform, probeYouTube(root))
                 "com.instagram.android" -> evaluateReelSession(pkg, platform, probeInstagram(root))
-                else -> handleGenericReels(root, platform, pkg) // Snapchat (unchanged)
+                "com.snapchat.android" -> handleSnapchatSpotlight(root, pkg)
+                "com.facebook.katana" -> handleFacebookReels(root, pkg)
+                else -> handleGenericReels(root, platform, pkg)
             }
         } finally {
             root.recycle()
@@ -547,6 +564,107 @@ class ReelCounterService : AccessibilityService() {
             }
             hasReelPager[pkg] = false
             hideBubble()
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Snapchat Spotlight detection
+    //
+    // Snapchat's Spotlight feed is a SurfaceView: it exposes no scrollable list,
+    // no per-video text/handle/index — the view tree is identical between videos.
+    // The only stable signal is the visible `spotlight_container` view, which is
+    // present only on the Spotlight tab (Stories/Discover use opera_viewer without
+    // it). We use it to gate "in viewer" (bubble + blocking); counting is driven
+    // by forward scroll events, the only per-swipe signal Snapchat surfaces.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Snapchat Spotlight gate. The feed exposes no scroll/index/identity, but the Spotlight tab is
+     * uniquely marked by a visible `spotlight_container` (Stories/Discover reuse `opera_viewer`
+     * without it). When present we treat the user as "on a reel feed" — this drives the bubble and
+     * gates blocking, and arms the CONTENT_CHANGE_TYPE_ENABLED counter in the event dispatcher.
+     */
+    private fun handleSnapchatSpotlight(root: AccessibilityNodeInfo, pkg: String) {
+        val inSpotlight = isInSnapchatSpotlight(root)
+        if (inSpotlight) {
+            hasReelPager[pkg] = true
+            keepBubbleVisible()
+        } else {
+            if (hasReelPager[pkg] == true) Log.d(TAG, "SPOTLIGHT LOST: pkg=$pkg")
+            hasReelPager[pkg] = false
+            cancelDwell(pkg) // drop a pending count if the user left before the dwell fired
+            hideBubble()
+        }
+    }
+
+    /**
+     * Snapchat exposes no per-video identity, so we dwell-gate by time alone: each new ENABLED
+     * change arms a delayed count and cancels the previous one. A video swiped past before DWELL_MS
+     * never counts, so only videos actually watched are counted — matching YouTube/Instagram.
+     */
+    private fun armSnapchatDwell(platform: Platform, pkg: String) {
+        cancelDwell(pkg)
+        val runnable = Runnable {
+            dwellRunnables.remove(pkg)
+            // Only count if still on the Spotlight feed (user didn't leave during the dwell).
+            if (hasReelPager[pkg] == true) tryCountReel(platform, pkg, "SNAP_DWELL")
+        }
+        dwellRunnables[pkg] = runnable
+        mainHandler.postDelayed(runnable, DWELL_MS)
+    }
+
+    /** True when the visible Spotlight feed container is in the tree. */
+    private fun isInSnapchatSpotlight(root: AccessibilityNodeInfo): Boolean {
+        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>() // node, depth
+        queue.add(root to 0)
+        val toRecycle = mutableListOf<AccessibilityNodeInfo>()
+        var found = false
+        try {
+            while (queue.isNotEmpty()) {
+                val (node, depth) = queue.removeFirst()
+                if (depth > MAX_TREE_DEPTH) continue
+                if (node.viewIdResourceName == "com.snapchat.android:id/spotlight_container" &&
+                    node.isVisibleToUser
+                ) {
+                    found = true
+                    break
+                }
+                for (i in 0 until node.childCount) {
+                    val child = node.getChild(i)
+                    if (child != null) {
+                        toRecycle.add(child)
+                        queue.add(child to depth + 1)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "isInSnapchatSpotlight error: ${e.message}")
+        } finally {
+            toRecycle.forEach { try { it.recycle() } catch (_: Exception) {} }
+        }
+        return found
+    }
+
+    /**
+     * Toggle FLAG_INCLUDE_NOT_IMPORTANT_VIEWS at runtime. Snapchat's Spotlight container is a
+     * not-important view (invisible to the service without this flag), but leaving the flag on
+     * permanently changes the window `rootInActiveWindow` returns for YouTube and breaks Shorts
+     * detection — so we scope it to Snapchat's foreground session only.
+     */
+    private fun setIncludeNotImportantViews(enable: Boolean) {
+        if (enable == includeNotImportantViewsOn) return
+        val info = serviceInfo ?: return
+        info.flags = if (enable) {
+            info.flags or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+        } else {
+            info.flags and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS.inv()
+        }
+        try {
+            serviceInfo = info
+            includeNotImportantViewsOn = enable
+            Log.d(TAG, "FLAG includeNotImportantViews=$enable")
+        } catch (e: Exception) {
+            Log.w(TAG, "setServiceInfo failed: ${e.message}")
         }
     }
 
@@ -714,6 +832,75 @@ class ReelCounterService : AccessibilityService() {
      * The current item index comes from CollectionItemInfo.rowIndex of the
      * first visible child, or from the fromIndex of the scroll event.
      */
+    /**
+     * Facebook Reels: the immersive reel viewer is an old `androidx.viewpager.widget.ViewPager`
+     * that exposes no collectionInfo, and Facebook strips its resource-id names, so neither the
+     * generic pager detector nor an Instagram-style id probe works. The viewer is, however,
+     * structurally identical to the home feed (both vertical RecyclerViews inside the tab pager) —
+     * the only reliable discriminator is reel-viewer chrome, exposed via content-descriptions that
+     * never appear on the home feed (e.g. "Create reel", "Reels tab details").
+     *
+     * So we gate purely on those signals: presence → we're on the reel feed, so flag the pager and
+     * show the HUD. Counting itself happens off the pager's TYPE_VIEW_SCROLLED events through the
+     * shared scroll path ([handleViewScrolled] → [countByHighWater]), exactly like Snapchat — each
+     * forward swap increments `fromIndex`, which the high-water mark counts once.
+     */
+    private fun handleFacebookReels(root: AccessibilityNodeInfo, pkg: String) {
+        val inReelViewer = isInFacebookReels(root)
+        if (inReelViewer) {
+            hasReelPager[pkg] = true
+            keepBubbleVisible()
+        } else {
+            if (hasReelPager[pkg] == true) {
+                Log.d(TAG, "FB reel viewer LOST: pkg=$pkg")
+                // Left the viewer — reset dedup so the next reel session counts from scratch.
+                maxPagerIndex.remove(pkg)
+                lastPagerIndex.remove(pkg)
+            }
+            hasReelPager[pkg] = false
+            hideBubble()
+        }
+    }
+
+    /**
+     * True when the Facebook immersive reel viewer is on screen. Detected by content-descriptions
+     * unique to the reel viewer's chrome — these are absent on the home feed, whose only reel-ish
+     * descriptions are the always-present "Reels, tab 2 of 6" bottom-nav button and a "Reel" tray
+     * label (both deliberately excluded here).
+     */
+    private fun isInFacebookReels(root: AccessibilityNodeInfo): Boolean {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        val toRecycle = mutableListOf<AccessibilityNodeInfo>()
+        var found = false
+        try {
+            while (queue.isNotEmpty()) {
+                val node = queue.removeFirst()
+                if (node.isVisibleToUser && isFacebookReelChrome(node.contentDescription?.toString())) {
+                    found = true
+                    break
+                }
+                for (i in 0 until node.childCount) {
+                    val child = node.getChild(i)
+                    if (child != null) { toRecycle.add(child); queue.add(child) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "isInFacebookReels error: ${e.message}")
+        } finally {
+            toRecycle.forEach { try { it.recycle() } catch (_: Exception) {} }
+        }
+        return found
+    }
+
+    private fun isFacebookReelChrome(desc: String?): Boolean {
+        desc ?: return false
+        return desc == "Create reel" ||
+                desc == "Reels tab details" ||
+                desc == "Navigate to your Reels profile" ||
+                desc == "Tap to show video controls"
+    }
+
     private fun findReelPager(root: AccessibilityNodeInfo, requiredPagerId: String? = null): Pair<Int, Int>? {
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>() // node, depth
         queue.add(root to 0)
@@ -879,17 +1066,28 @@ class ReelCounterService : AccessibilityService() {
      * the cached limits as that global cap. Called on every counted reel AND every time a tracked
      * app reaches the foreground, so the block re-triggers when any reel app is reopened.
      * Suppression (snooze, per-session dismissal) is mode-dependent and handled inside
-     * [FloatingCounterService].
+     * [OverlayController].
      */
     private fun evaluateBlocking(platform: Platform, pkg: String) {
-        val prefs = getSharedPreferences(FloatingCounterService.PREFS, Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences(OverlayController.PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean("blocking_enabled", false)) return
+
+        // Block ONLY while the user is actually on a reel/shorts feed — never the rest of the app
+        // (YouTube long-form/home/search, Instagram DMs, etc.). Same signal the HUD pill uses.
+        // TikTok is entirely short-form, so it always qualifies. When not on a reel feed, dismiss
+        // any scrim that's showing — this clears it when the user backs out of Shorts to the feed.
+        val onReelFeed = hasReelPager[pkg] == true || platform == Platform.TIKTOK
+        if (!onReelFeed) {
+            overlay?.dismissBlockingOverlay()
+            return
+        }
+
         // Fall back to the entity default so blocking works before any limit was saved
         val limit = limitsCache.values.maxOrNull() ?: 30
         val total = reelCounts.values.sum()
         if (total >= limit) {
             val mode = BlockingMode.fromPref(prefs.getString(BlockingMode.PREF_KEY, null))
-            FloatingCounterService.instance?.showBlockingOverlay(platform, limit, mode)
+            overlay?.showBlockingOverlay(platform, limit, mode)
         }
     }
 
@@ -944,19 +1142,19 @@ class ReelCounterService : AccessibilityService() {
             if (c > 0) {
                 val limit = limits.find { it.platform == p.name }?.dailyReelLimit
                     ?: limitsCache[p.name] ?: 30
-                FloatingCounterService.HudPlatform(p, c, limit)
+                OverlayController.HudPlatform(p, c, limit)
             } else null
         }
         // Same reel-ratio the dashboard uses to choose the brain variation.
         val reelLimit = limits.firstOrNull()?.dailyReelLimit ?: 50
         val reelRatio = if (reelLimit > 0) total.toFloat() / reelLimit else 0f
-        FloatingCounterService.instance?.updateHud(total, health, breakdown, reelRatio)
+        overlay?.updateHud(total, health, breakdown, reelRatio)
         keepBubbleVisible()
     }
 
     /** Show the pill and keep it visible (via the heartbeat) for as long as a reel feed is open. */
     private fun keepBubbleVisible() {
-        FloatingCounterService.instance?.show()
+        overlay?.show()
         startHeartbeat()
     }
 
@@ -979,6 +1177,7 @@ class ReelCounterService : AccessibilityService() {
     private fun startHeartbeat() {
         if (!heartbeatActive) {
             heartbeatActive = true
+            consecutiveAwayPolls = 0
             mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_MS)
         }
     }
@@ -986,6 +1185,6 @@ class ReelCounterService : AccessibilityService() {
     private fun hideBubble() {
         // The heartbeat keeps running: it manages pill visibility and foreground-session
         // tracking itself, and stops when the user leaves all tracked apps.
-        FloatingCounterService.instance?.hide()
+        overlay?.hide()
     }
 }

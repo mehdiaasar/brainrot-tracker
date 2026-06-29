@@ -135,9 +135,10 @@ class NotificationHelper(private val context: Context) {
     }
 
     /**
-     * The ongoing foreground-service notification. The status-bar symbol is the brain silhouette;
-     * the expanded view shows the current [mood]'s brain (full colour) and updates as the user
-     * scrolls — re-posted from [FloatingCounterService.updateHud].
+     * Ongoing-service notification builder. Currently unused: the overlay was moved off a foreground
+     * service into [com.example.brainrottracker.service.OverlayController] (drawn directly from the
+     * accessibility service) to avoid MIUI/HyperOS killing the service. Kept for now in case a
+     * persistent status notification is reintroduced.
      */
     fun getServiceNotification(
         mood: DashboardMood = DashboardMood.GREAT,

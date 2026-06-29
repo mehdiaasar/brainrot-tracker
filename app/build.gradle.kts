@@ -44,6 +44,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Distinct package so the debug build installs side-by-side with an existing
+            // (differently-signed) release/clone of LoopOut — no uninstall needed.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

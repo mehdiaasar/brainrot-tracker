@@ -6,8 +6,6 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -42,12 +40,6 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- Floating counter overlay service (only started from inside the app) -->
-        <service
-            android:name=".service.FloatingCounterService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse" />
-
         <!-- Home screen widget -->
         <receiver
             android:name=".widget.BrainRotWidgetReceiver"
@@ -59,10 +51,6 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/brainrot_widget_info" />
         </receiver>
-
-        <property
-            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-            android:value="Tracks screen time on social media apps to help users manage their digital wellness" />
 
     </application>
 </manifest>

@@ -8,7 +8,8 @@ enum class Platform(
     INSTAGRAM("com.instagram.android", "Instagram", "📸"),
     YOUTUBE("com.google.android.youtube", "YouTube", "▶️"),
     TIKTOK("com.zhiliaoapp.musically", "TikTok", "🎵"),
-    SNAPCHAT("com.snapchat.android", "Snapchat", "👻");
+    SNAPCHAT("com.snapchat.android", "Snapchat", "👻"),
+    FACEBOOK("com.facebook.katana", "Facebook", "📘");
 
     companion object {
         fun fromPackageName(packageName: String): Platform? {

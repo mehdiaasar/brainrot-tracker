@@ -7,4 +7,4 @@
     android:notificationTimeout="100"
     android:accessibilityFlags="flagReportViewIds"
     android:settingsActivity="com.example.brainrottracker.MainActivity"
-    android:packageNames="com.instagram.android,com.google.android.youtube,com.zhiliaoapp.musically,com.snapchat.android" />
+    android:packageNames="com.instagram.android,com.google.android.youtube,com.zhiliaoapp.musically,com.snapchat.android,com.facebook.katana" />

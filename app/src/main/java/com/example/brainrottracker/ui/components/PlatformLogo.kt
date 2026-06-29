@@ -29,6 +29,7 @@ fun PlatformLogo(
             Platform.YOUTUBE -> drawYouTube()
             Platform.TIKTOK -> drawTikTok()
             Platform.SNAPCHAT -> drawSnapchat()
+            Platform.FACEBOOK -> drawFacebook()
         }
     }
 }
@@ -150,4 +151,34 @@ private fun DrawScope.drawSnapchat() {
     // Eyes + cheeks dots in the brand yellow.
     drawCircle(Color(0xFFFFFC00), radius = s * 0.03f, center = Offset(s * 0.43f, s * 0.42f))
     drawCircle(Color(0xFFFFFC00), radius = s * 0.03f, center = Offset(s * 0.57f, s * 0.42f))
+}
+
+private fun DrawScope.drawFacebook() {
+    val s = size.minDimension
+    val corner = s * 0.26f
+    // Brand-blue squircle.
+    drawRoundRect(
+        color = Color(0xFF1877F2),
+        topLeft = Offset(0f, 0f),
+        size = Size(s, s),
+        cornerRadius = CornerRadius(corner, corner)
+    )
+    // White lowercase "f": a vertical stem with a hooked top and a crossbar.
+    val stroke = Stroke(width = s * 0.11f, cap = StrokeCap.Round)
+    val stem = Path().apply {
+        // Hook at the top, then straight down the stem.
+        moveTo(s * 0.62f, s * 0.24f)
+        quadraticBezierTo(s * 0.44f, s * 0.24f, s * 0.44f, s * 0.42f)
+        lineTo(s * 0.44f, s * 0.78f)
+    }
+    drawPath(stem, Color.White, style = stroke)
+    // Crossbar.
+    drawPath(
+        Path().apply {
+            moveTo(s * 0.34f, s * 0.48f)
+            lineTo(s * 0.60f, s * 0.48f)
+        },
+        Color.White,
+        style = stroke
+    )
 }

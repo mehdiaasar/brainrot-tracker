@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.brainrottracker.data.model.Platform
 import com.example.brainrottracker.theme.AppTheme
+import com.example.brainrottracker.theme.ChartFacebook
 import com.example.brainrottracker.theme.ChartInstagram
 import com.example.brainrottracker.theme.ChartSnapchat
 import com.example.brainrottracker.theme.ChartTikTokDark
@@ -218,6 +221,7 @@ private fun HeroCard(
 
 /* ───────────────────────── Screen-time chart ───────────────────────── */
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ScreenTimeCard(
     minutesByDate: Map<String, Map<Platform, Int>>, mood: StatsMood,
@@ -241,14 +245,16 @@ private fun ScreenTimeCard(
             .padding(20.dp)
     ) {
         Text("Screen Time Breakdown", fontWeight = FontWeight.SemiBold, color = textPrimary, fontSize = 16.sp)
-        Row(
+        FlowRow(
             modifier = Modifier.padding(top = 14.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(13.dp)
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             LegendDot(tiktok, "TikTok", textSecondary)
             LegendDot(ChartYouTube, "YouTube", textSecondary)
             LegendDot(ChartInstagram, "Instagram", textSecondary)
             LegendDot(ChartSnapchat, "Snapchat", textSecondary)
+            LegendDot(ChartFacebook, "Facebook", textSecondary)
         }
         BarChart(
             minutesByDate = minutesByDate, mood = mood, tiktok = tiktok, track = track,
@@ -300,6 +306,7 @@ private fun BarChart(
                         Platform.YOUTUBE to ChartYouTube,
                         Platform.INSTAGRAM to ChartInstagram,
                         Platform.SNAPCHAT to ChartSnapchat,
+                        Platform.FACEBOOK to ChartFacebook,
                     )
                     days.forEachIndexed { index, day ->
                         val m = minutesByDate[day.toString()] ?: emptyMap()
@@ -528,7 +535,8 @@ private fun FooterCard(mood: StatsMood) {
 private fun LegendDot(color: Color, label: String, textColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(modifier = Modifier.size(9.dp).clip(CircleShape).background(color))
-        Text(label, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            maxLines = 1, softWrap = false)
     }
 }
 

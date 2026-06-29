@@ -38,6 +38,9 @@ interface DailyLogDao {
     @Query("UPDATE daily_logs SET snapchatSpotlights = snapchatSpotlights + 1 WHERE date = :date")
     suspend fun incrementSnapchatSpotlights(date: String)
 
+    @Query("UPDATE daily_logs SET facebookReels = facebookReels + 1 WHERE date = :date")
+    suspend fun incrementFacebookReels(date: String)
+
     @Query("SELECT MIN(date) FROM daily_logs")
     suspend fun getEarliestDate(): String?
 
