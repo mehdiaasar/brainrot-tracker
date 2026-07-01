@@ -22,9 +22,6 @@ interface DailyLogDao {
     @Query("SELECT * FROM daily_logs WHERE date BETWEEN :startDate AND :endDate ORDER BY date ASC")
     fun getDateRange(startDate: String, endDate: String): Flow<List<DailyLog>>
 
-    @Query("SELECT * FROM daily_logs ORDER BY date ASC")
-    fun getAllLogs(): Flow<List<DailyLog>>
-
     // Per-platform reel/video increment queries
     @Query("UPDATE daily_logs SET instagramReels = instagramReels + 1 WHERE date = :date")
     suspend fun incrementInstagramReels(date: String)

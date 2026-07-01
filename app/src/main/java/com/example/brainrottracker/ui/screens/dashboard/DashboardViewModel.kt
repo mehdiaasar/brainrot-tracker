@@ -166,12 +166,4 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         SharingStarted.WhileSubscribed(5000),
         listOf("✨ Start your wellness journey today.")
     )
-
-    fun getMotivationalMessage(score: Int): String = when {
-        score >= 90 -> "🌟 Elite Focus. Your brain is thriving!"
-        score >= 75 -> "💪 Healthy Mind. Stay mindful."
-        score >= 50 -> "😐 Moderate Usage. Take a brief break."
-        score >= 25 -> "⚠️ High Brainrot. Your mind needs rest."
-        else -> "🚨 Critical Damage. Close those apps now!"
-    }
 }

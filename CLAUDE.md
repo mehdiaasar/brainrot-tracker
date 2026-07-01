@@ -59,7 +59,7 @@ Snapchat Spotlight is a special case: the feed is a `SurfaceView` that exposes n
 
 **Floating overlay** — `OverlayController` is **not** a service; it is a plain controller created and owned by `ReelCounterService` (the always-alive accessibility service) and draws `SYSTEM_ALERT_WINDOW` views: a counter bubble (with expandable stats popup, a normal `TYPE_APPLICATION_OVERLAY` added via the application context so the OS keeps it off the lock screen) and a full-screen mode-aware blocking scrim (`TYPE_ACCESSIBILITY_OVERLAY`, top-most, added via the accessibility service's WindowManager). There is **no foreground service** — drawing from the accessibility service avoids background foreground-service starts that MIUI/HyperOS (Xiaomi/POCO) blocks and penalizes (which previously surfaced as "This service is malfunctioning" and killed reel detection). Visibility is driven by the heartbeat + reel detection in `ReelCounterService`.
 
-**Notifications** — `NotificationHelper` manages two user-facing channels: milestone alerts (25/50/…/200 reels per day) and an end-of-day summary. (It still defines a `service_running` channel and a `getServiceNotification()` builder, now unused after the foreground service was removed.)
+**Notifications** — `NotificationHelper` manages two user-facing channels: milestone alerts (25/50/…/200 reels per day) and an end-of-day summary. (The `service_running` channel and `getServiceNotification()` builder were removed along with the foreground service.)
 
 **Widget** — `BrainRotWidget` (Glance) + `BrainRotWidgetReceiver` for a home screen widget showing today's stats.
 
