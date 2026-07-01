@@ -17,6 +17,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,9 +55,13 @@ import com.example.brainrottracker.theme.AppTheme
 import com.example.brainrottracker.theme.Motion
 import com.example.brainrottracker.ui.components.pressScale
 import com.example.brainrottracker.data.local.prefs.AppPreferences
+import com.example.brainrottracker.ui.permissions.PermissionBanner
+import com.example.brainrottracker.ui.permissions.rememberMissingPermissions
+import com.example.brainrottracker.ui.permissions.rememberPermissionRequester
 import com.example.brainrottracker.ui.screens.dashboard.DashboardScreen
 import com.example.brainrottracker.ui.screens.limits.LimitsScreen
 import com.example.brainrottracker.ui.screens.onboarding.OnboardingScreen
+import com.example.brainrottracker.ui.screens.permissions.PermissionFixScreen
 import com.example.brainrottracker.ui.screens.signin.GoogleSignInScreen
 import com.example.brainrottracker.ui.screens.stats.StatsScreen
 import com.example.brainrottracker.ui.screens.streaks.StreaksScreen
@@ -133,9 +138,19 @@ fun MainNavigation() {
         backStack += Streaks
     }
 
-    // Hide the bar on full-screen flows (onboarding, sign-in)
+    // Detect missing permissions and surface a persistent banner across the main app.
+    // Re-checks on every ON_RESUME so it clears the moment the user grants from settings.
+    // Only *required* permissions nag — optional ones (e.g. notifications) are ignored here.
+    val missing by rememberMissingPermissions()
+    val requiredMissing = missing.filter { it.required }
+    val requestPermission = rememberPermissionRequester()
+
+    // Hide the bar on full-screen flows (onboarding, sign-in, permission fix)
     val topKey = backStack.lastOrNull()
-    val showBottomBar = topKey != Onboarding && topKey != GoogleSignIn
+    val showBottomBar = topKey != Onboarding && topKey != GoogleSignIn && topKey != PermissionFix
+    // Show the banner everywhere except those same full-screen flows.
+    val showBanner = requiredMissing.isNotEmpty() &&
+        topKey != Onboarding && topKey != GoogleSignIn && topKey != PermissionFix
 
     Scaffold(
         containerColor = navBg,
@@ -192,8 +207,27 @@ fun MainNavigation() {
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (showBanner) {
+                PermissionBanner(
+                    message = "LoopOut can't track reels without these permissions",
+                    onAllow = {
+                        // One missing → jump straight to it; several → open the fix screen.
+                        if (requiredMissing.size == 1) requestPermission(requiredMissing.first())
+                        else backStack += PermissionFix
+                    }
+                )
+            }
+            // The banner already draws under and clears the status bar, so when it's showing the
+            // screens below must not re-apply the top inset (that double-count is what left the
+            // empty gap). Keep only the bottom inset in that case.
+            val contentPadding = if (showBanner) {
+                PaddingValues(bottom = innerPadding.calculateBottomPadding())
+            } else {
+                innerPadding
+            }
             NavDisplay(
+                modifier = Modifier.weight(1f).padding(contentPadding),
                 backStack = backStack,
                 onBack = { backStack.removeLastOrNull() },
                 entryProvider = entryProvider {
@@ -246,6 +280,13 @@ fun MainNavigation() {
                     }
                     entry<Streaks> {
                         StreaksScreen(onOpenSettings = openSettings)
+                    }
+                    entry<PermissionFix> {
+                        PermissionFixScreen(
+                            missing = requiredMissing,
+                            requestPermission = requestPermission,
+                            onClose = { backStack.removeLastOrNull() },
+                        )
                     }
                 }
             )

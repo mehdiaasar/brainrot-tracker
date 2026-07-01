@@ -106,12 +106,10 @@ fun DashboardScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var isTracking by remember { mutableStateOf(ReelCounterService.isRunning) }
-    var hasUsagePermission by remember { mutableStateOf(ScreenTimeHelper.hasPermission(context)) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 isTracking = ReelCounterService.isRunning
-                hasUsagePermission = ScreenTimeHelper.hasPermission(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -173,10 +171,6 @@ fun DashboardScreen(
 
     Column(modifier = modifier.fillMaxSize().background(bg)) {
         DashboardTopBar(isTracking = isTracking)
-
-        if (!hasUsagePermission) {
-            UsageAccessBanner(context)
-        }
 
         Box(
             modifier = Modifier
@@ -936,32 +930,6 @@ private fun ReminderCard(
                 .width(132.dp)
                 .graphicsLayer { scaleX = 1.04f; scaleY = 1.04f }
         )
-    }
-}
-
-/** Usage-access prompt shown under the top bar when screen-time permission is missing. */
-@Composable
-private fun UsageAccessBanner(
-    context: android.content.Context,
-) {
-    val colors = AppTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 8.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(colors.surfaceAlt)
-            .clickable { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("Grant Usage Access", fontWeight = FontWeight.Medium, color = colors.textPrimary, fontSize = 14.sp)
-            Text("Required to show screen time", color = colors.textSecondary, fontSize = 12.sp)
-        }
-        Text("→", color = colors.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
 

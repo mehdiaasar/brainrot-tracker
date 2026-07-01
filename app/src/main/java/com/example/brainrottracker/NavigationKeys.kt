@@ -9,3 +9,4 @@ import kotlinx.serialization.Serializable
 @Serializable data object Stats : NavKey
 @Serializable data object Limits : NavKey
 @Serializable data object Streaks : NavKey
+@Serializable data object PermissionFix : NavKey

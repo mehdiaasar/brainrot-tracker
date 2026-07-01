@@ -28,8 +28,11 @@ android {
         applicationId = "io.github.aasarmehdi.loopout"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
+        // Launcher/label text, overridable per build type so side-by-side installs (beta) are
+        // distinguishable in the launcher AND the Accessibility settings list.
+        manifestPlaceholders["appLabel"] = "LoopOut"
     }
 
     signingConfigs {
@@ -49,6 +52,7 @@ android {
             // (differently-signed) release/clone of LoopOut — no uninstall needed.
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            manifestPlaceholders["appLabel"] = "LoopOut Debug"
         }
         release {
             isMinifyEnabled = true
@@ -57,6 +61,16 @@ android {
             if (keystorePropsFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        // Release-signed build with its OWN applicationId + label, meant for sideloading to
+        // testers so it installs ALONGSIDE the Play Store copy (which they keep, preserving the
+        // closed-testing tester count). Mirrors release (minify/shrink/signing) via initWith.
+        create("beta") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            manifestPlaceholders["appLabel"] = "LoopOut Beta"
+            matchingFallbacks += "release"
         }
     }
     compileOptions {
